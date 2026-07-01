@@ -1,3 +1,9 @@
+const BASE_FIELDS = [
+  'base_ext_code', 'base_name', 'base_slug', 'base_category',
+  'base_image', 'sku_code', 'sku_image', 'sku_cost',
+  'sku_currency', 'sku_default', 'sku_stock', 'sku_manual', 'price_group'
+];
+
 const CATALOG_JSON = {
   "families": [
     {"external_code": "fam_stone", "code": "stone", "name": {"ru": "Искусственный камень", "en": "Artificial stone"}},
@@ -99,20 +105,36 @@ const CATALOG_JSON = {
     }
   ],
   "categories": [
-    {"external_code": "artificial-stone", "parent_external_code": null, "slug": "artificial-stone", "name": {"ru": "Искусственный камень", "en": "Artificial stone"}},
-    {"external_code": "sinks", "parent_external_code": null, "slug": "sinks", "name": {"ru": "Мойки и раковины", "en": "Sinks and sinks"}},
-    {"external_code": "faucets-and-dispensers", "parent_external_code": null, "slug": "faucets-and-dispensers", "name": {"ru": "Смесители и дозаторы", "en": "Mixers and dispensers"}},
-    {"external_code": "edges-and-sides", "parent_external_code": null, "slug": "edges-and-sides", "name": {"ru": "Кромки и бортики", "en": "Edges and sides"}},
-    {"external_code": "acrylic", "parent_external_code": "artificial-stone", "slug": "acrylic", "name": {"ru": "Акриловый камень", "en": "Acrylic stone"}},
-    {"external_code": "quartz", "parent_external_code": "artificial-stone", "slug": "quartz", "name": {"ru": "Кварцевый агломерат", "en": "Quartz agglomerate"}},
-    {"external_code": "kitchen-sinks", "parent_external_code": "sinks", "slug": "kitchen-sinks", "name": {"ru": "Мойки для кухни", "en": "Kitchen sinks"}},
-    {"external_code": "bathroom-sinks", "parent_external_code": "sinks", "slug": "bathroom-sinks", "name": {"ru": "Раковины для ванной", "en": "Bathroom sinks"}},
-    {"external_code": "faucets", "parent_external_code": "faucets-and-dispensers", "slug": "faucets", "name": {"ru": "Смесители", "en": "Faucets"}},
-    {"external_code": "dispensers", "parent_external_code": "faucets-and-dispensers", "slug": "dispensers", "name": {"ru": "Дозаторы", "en": "Dispensers"}},
-    {"external_code": "sides", "parent_external_code": "edges-and-sides", "slug": "sides", "name": {"ru": "Бортики", "en": "Sides"}},
-    {"external_code": "leading-edges", "parent_external_code": "edges-and-sides", "slug": "leading-edges", "name": {"ru": "Передние кромки", "en": "Leading edges"}}
+    {"external_code": "cat_accessory_root", "parent_external_code": null, "slug": "accessories", "name": {"ru": "Комплектующие и бортики", "en": "Accessories and edges"}},
+    {"external_code": "cat_artificial-stone", "parent_external_code": null, "slug": "artificial-stone", "name": {"ru": "Искусственный камень", "en": "Artificial stone"}},
+    {"external_code": "cat_sinks", "parent_external_code": null, "slug": "sinks", "name": {"ru": "Мойки и раковины", "en": "Sinks and sinks"}},
+    {"external_code": "cat_faucets-and-dispensers", "parent_external_code": null, "slug": "faucets-and-dispensers", "name": {"ru": "Смесители и дозаторы", "en": "Mixers and dispensers"}},
+    {"external_code": "cat_edges-and-sides", "parent_external_code": null, "slug": "edges-and-sides", "name": {"ru": "Кромки и бортики", "en": "Edges and sides"}},
+    {"external_code": "cat_acrylic", "parent_external_code": "cat_artificial-stone", "slug": "acrylic", "name": {"ru": "Акриловый камень", "en": "Acrylic stone"}},
+    {"external_code": "cat_quartz", "parent_external_code": "cat_artificial-stone", "slug": "quartz", "name": {"ru": "Кварцевый агломерат", "en": "Quartz agglomerate"}},
+    {"external_code": "cat_kitchen-sinks", "parent_external_code": "cat_sinks", "slug": "kitchen-sinks", "name": {"ru": "Мойки для кухни", "en": "Kitchen sinks"}},
+    {"external_code": "cat_bathroom-sinks", "parent_external_code": "cat_sinks", "slug": "bathroom-sinks", "name": {"ru": "Раковины для ванной", "en": "Bathroom sinks"}},
+    {"external_code": "cat_faucets", "parent_external_code": "cat_faucets-and-dispensers", "slug": "faucets", "name": {"ru": "Смесители", "en": "Faucets"}},
+    {"external_code": "cat_dispensers", "parent_external_code": "cat_faucets-and-dispensers", "slug": "dispensers", "name": {"ru": "Дозаторы", "en": "Dispensers"}},
+    {"external_code": "cat_sides", "parent_external_code": "cat_accessory_root", "slug": "sides", "name": {"ru": "Бортики", "en": "Sides"}},
+    {"external_code": "cat_leading-edges", "parent_external_code": "cat_accessory_root", "slug": "leading-edges", "name": {"ru": "Передние кромки", "en": "Leading edges"}}
   ],
-  "price_groups": [],
+  "price_groups": [
+    {
+      "external_code": "pg_m0",
+      "product_family_external_code": "fam_stone",
+      "slug": "m0",
+      "name": {
+        "ru": "Категория M0",
+        "en": "Category M0"
+      },
+      "meta": {
+        "purchase_cost": 63.7,
+        "purchase_currency": "USD",
+        "markup_retail": 30.0
+      }
+    }
+  ],
   "complex_dictionaries": [
     {
       "code": "cutting_groups", "name": {"ru": "Группы раскроя", "en": "Cutting groups"},
@@ -299,25 +321,22 @@ const CATALOG_JSON = {
       "code": "cutting_groups", "type": "complex_reference", "name": {"ru": "Группа раскроя", "en": "Cutting Group"}, "is_multiple": false, "options": []
     }
   ],
-  "products": [] 
+  "products": []
 };
 
-/**
- * Динамический генератор структуры листов. Настраивает cfg_types в виде удобной матрицы чекбоксов.
- */
 function getConfigDefs() {
   const attrCodes = [];
   if (CATALOG_JSON.attributes) {
-    CATALOG_JSON.attributes.forEach(a => { 
+    CATALOG_JSON.attributes.forEach(a => {
       if (a.code && a.code !== 'price_group' && !attrCodes.includes(a.code)) {
-        attrCodes.push(a.code); 
+        attrCodes.push(a.code);
       }
     });
   }
   if (CATALOG_JSON.complex_dictionaries) {
-    CATALOG_JSON.complex_dictionaries.forEach(cd => { 
+    CATALOG_JSON.complex_dictionaries.forEach(cd => {
       if (cd.code && cd.code !== 'price_group' && !attrCodes.includes(cd.code)) {
-        attrCodes.push(cd.code); 
+        attrCodes.push(cd.code);
       }
     });
   }
@@ -329,13 +348,13 @@ function getConfigDefs() {
     CATALOG_JSON.types.forEach(t => {
       let familyCode = t.family_external_code || '';
       if (familyCode.startsWith('fam_')) {
-          familyCode = familyCode.replace('fam_', '');
+        familyCode = familyCode.replace('fam_', '');
       }
 
       const row = [
-        t.code || '', 
-        familyCode, 
-        t.name?.ru || '', 
+        t.code || '',
+        familyCode,
+        t.name?.ru || '',
         t.name?.en || ''
       ];
 
@@ -349,11 +368,11 @@ function getConfigDefs() {
   }
 
   const baseFields = [
-    'base_ext_code', 'base_name', 'base_slug', 'base_category', 
-    'base_image', 'sku_code', 'sku_image', 'sku_cost', 
+    'base_ext_code', 'base_name', 'base_slug', 'base_category',
+    'base_image', 'sku_code', 'sku_image', 'sku_cost',
     'sku_currency', 'sku_default', 'sku_stock', 'sku_manual', 'price_group'
   ];
-  
+
   const defaultMeta = {
     'base_ext_code': { name: 'Внешний код', desc: 'Уникальный внешний идентификатор базового товара. Заполняется один раз на товар.' },
     'base_name': { name: 'Название товара', desc: 'Полноценное название товара. Заполняется один раз на товар.' },
@@ -373,7 +392,7 @@ function getConfigDefs() {
   };
 
   const cfgColOrderRows = [['column_code', 'sort_order', 'display_name', 'description']];
-  
+
   baseFields.forEach((col, idx) => {
     const meta = defaultMeta[col] || { name: '', desc: '' };
     cfgColOrderRows.push([col, (idx + 1) * 10, meta.name, meta.desc]);
@@ -408,10 +427,10 @@ function getConfigDefs() {
       ['attribute_code', 'external_code', 'slug', 'value_ru', 'value_en', 'hex', 'image']
     ],
     "cfg_price_groups": [
-      ['family_code', 'external_code', 'slug', 'name_ru', 'name_en', 'purchase_cost', 'purchase_currency', 'markup_retail', 'markup_dealer']
+      ['family_code', 'external_code', 'slug', 'name_ru', 'name_en', 'purchase_cost', 'purchase_currency', 'markup_retail']
     ],
     "cfg_complex_dicts": [
-      ['dict_code', 'external_code', 'slug', 'name_ru', 'name_en', 'cost_price', 'markup', 'k1', 'v1', 'k2', 'v2', 'k3', 'v3']
+      ['dict_code', 'external_code', 'slug', 'name_ru', 'name_en', 'k1', 'v1', 'k2', 'v2', 'k3', 'v3']
     ]
   };
 
@@ -419,7 +438,7 @@ function getConfigDefs() {
     CATALOG_JSON.price_groups.forEach(pg => {
       let familyCode = pg.product_family_external_code || '';
       if (familyCode.startsWith('fam_')) {
-          familyCode = familyCode.replace('fam_', '');
+        familyCode = familyCode.replace('fam_', '');
       }
       defs.cfg_price_groups.push([
         familyCode,
@@ -429,8 +448,7 @@ function getConfigDefs() {
         pg.name?.en || '',
         pg.meta?.purchase_cost || 0,
         pg.meta?.purchase_currency || 'USD',
-        pg.meta?.markup_retail || 0,
-        pg.meta?.markup_dealer || 0
+        pg.meta?.markup_retail || 0
       ]);
     });
   }
@@ -439,9 +457,9 @@ function getConfigDefs() {
     CATALOG_JSON.families.forEach(f => {
       const metaSchemaStr = f.meta_schema ? JSON.stringify(f.meta_schema) : '';
       defs.cfg_families.push([
-        f.code || '', 
-        f.external_code || '', 
-        f.name?.ru || '', 
+        f.code || '',
+        f.external_code || '',
+        f.name?.ru || '',
         f.name?.en || '',
         metaSchemaStr
       ]);
@@ -451,10 +469,10 @@ function getConfigDefs() {
   if (CATALOG_JSON.categories) {
     CATALOG_JSON.categories.forEach(c => {
       defs.cfg_categories.push([
-        c.external_code || '', 
-        c.parent_external_code || '', 
-        c.slug || '', 
-        c.name?.ru || '', 
+        c.external_code || '',
+        c.parent_external_code || '',
+        c.slug || '',
+        c.name?.ru || '',
         c.name?.en || ''
       ]);
     });
@@ -473,16 +491,16 @@ function getConfigDefs() {
   if (CATALOG_JSON.attributes) {
     CATALOG_JSON.attributes.forEach(a => {
       if (a.code === 'price_group') return;
-      
+
       const isVariantOnly = variantOnlyMap[a.code] ? 'TRUE' : 'FALSE';
       const isMultiple = a.is_multiple ? 'TRUE' : 'FALSE';
-      
+
       defs.cfg_attributes.push([
-        a.code || '', 
-        a.name?.ru || '', 
-        a.name?.en || '', 
-        a.type || 'string', 
-        isMultiple, 
+        a.code || '',
+        a.name?.ru || '',
+        a.name?.en || '',
+        a.type || 'string',
+        isMultiple,
         isVariantOnly
       ]);
 
@@ -505,23 +523,20 @@ function getConfigDefs() {
   if (CATALOG_JSON.complex_dictionaries) {
     CATALOG_JSON.complex_dictionaries.forEach(cd => {
       if (cd.code === 'price_group') return;
-      
+
       if (cd.records && cd.records.length > 0) {
         cd.records.forEach(rec => {
-          const costPrice = rec.meta?.cost_price !== undefined ? rec.meta.cost_price : '';
-          const markup = rec.meta?.cost_price_markup_retail !== undefined ? rec.meta.cost_price_markup_retail : '';
-          
           const nameRu = typeof rec.name === 'object' ? (rec.name?.ru || '') : (rec.name || '');
           const nameEn = typeof rec.name === 'object' ? (rec.name?.en || '') : '';
 
           let k1 = '', v1 = '', k2 = '', v2 = '', k3 = '', v3 = '';
-                if (cd.code === 'cutting_groups') {
-                  k1 = 'rotate'; v1 = rec.meta?.rotate !== undefined ? String(rec.meta.rotate).toUpperCase() : '';
-                  k2 = 'cut'; v2 = rec.meta?.cut !== undefined ? String(rec.meta.cut).toUpperCase() : '';
-                } else if (cd.code === 'thicknesses') {
-                  k1 = 'material_code'; v1 = rec.meta?.material_code || '';
-                  k2 = 'thickness'; v2 = rec.meta?.thickness !== undefined ? String(rec.meta.thickness) : '';
-                  k3 = 'coefficient'; v3 = rec.meta?.coefficient !== undefined ? String(rec.meta.coefficient) : '';
+          if (cd.code === 'cutting_groups') {
+            k1 = 'rotate'; v1 = rec.meta?.rotate !== undefined ? String(rec.meta.rotate).toUpperCase() : '';
+            k2 = 'cut'; v2 = rec.meta?.cut !== undefined ? String(rec.meta.cut).toUpperCase() : '';
+          } else if (cd.code === 'thicknesses') {
+            k1 = 'material_code'; v1 = rec.meta?.material_code || '';
+            k2 = 'thickness'; v2 = rec.meta?.thickness !== undefined ? String(rec.meta.thickness) : '';
+            k3 = 'coefficient'; v3 = rec.meta?.coefficient !== undefined ? String(rec.meta.coefficient) : '';
           }
 
           defs.cfg_complex_dicts.push([
@@ -530,9 +545,7 @@ function getConfigDefs() {
             rec.slug || '',
             nameRu,
             nameEn,
-            costPrice,
-            markup,
-            k1, v1, k2, v2
+            k1, v1, k2, v2, k3, v3
           ]);
 
         });
@@ -542,4 +555,3 @@ function getConfigDefs() {
 
   return defs;
 }
-

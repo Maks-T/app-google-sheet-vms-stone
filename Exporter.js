@@ -11,7 +11,7 @@ function exportCatalogJson() {
   const pgSheet = ss.getSheetByName('cfg_price_groups');
 
   const mappings = {};
-  
+
   const catReader = getRowReader(catSheet);
   if (catReader) {
     catReader.rows.forEach(row => {
@@ -20,7 +20,7 @@ function exportCatalogJson() {
       if (extCode && nameRu) mappings['category:' + nameRu] = extCode;
     });
   }
-  
+
   const optReader = getRowReader(optSheet);
   if (optReader) {
     optReader.rows.forEach(row => {
@@ -32,7 +32,7 @@ function exportCatalogJson() {
       }
     });
   }
-  
+
   const compReader = getRowReader(complexSheet);
   if (compReader) {
     compReader.rows.forEach(row => {
@@ -52,8 +52,9 @@ function exportCatalogJson() {
       const slug = pgReader.getVal(row, 'slug');
       const nameRu = pgReader.getVal(row, 'name_ru');
       if (extCode) {
-        if (slug) mappings['price_group:' + slug] = extCode;
-        if (nameRu) mappings['price_group:' + nameRu] = extCode;
+        // Оптимизировано: Приводим ключи карты к нижнему регистру для регистронезависимого поиска [1]
+        if (slug) mappings['price_group:' + String(slug).toLowerCase().trim()] = extCode;
+        if (nameRu) mappings['price_group:' + String(nameRu).toLowerCase().trim()] = extCode;
       }
     });
   }
@@ -89,7 +90,7 @@ function exportCatalogJson() {
     if (lowerType === 'string') {
       return String(rawVal);
     }
-    
+
     return mappings[attrCode + ':' + rawVal] ?? rawVal;
   };
 
@@ -124,8 +125,8 @@ function exportCatalogJson() {
     for (let r = 2; r < rows.length; r++) {
       const row = rows[r];
       const getVal = (code) => {
-        const idx = sysHeaders.indexOf(code);
-        return idx !== -1 ? row[idx] : null;
+        const colIndex = sysHeaders.indexOf(code);
+        return colIndex !== -1 ? row[colIndex] : null;
       };
 
       const rawExtCode = getVal('base_ext_code');
@@ -180,20 +181,19 @@ function exportCatalogJson() {
         let hasVariantAttr = false;
         let priceGroupExtCode = null;
 
+        // ИСПРАВЛЕНО: Считываем ценовую группу как системное базовое поле напрямую [1]
+        const rawPriceGroup = getVal('price_group');
+        if (rawPriceGroup) {
+          const cleanKey = String(rawPriceGroup).toLowerCase().trim();
+          priceGroupExtCode = mappings['price_group:' + cleanKey] || ('pg_' + generateSlug(rawPriceGroup));
+        }
+
         for (let c = 0; c < sysHeaders.length; c++) {
           const attrCode = sysHeaders[c];
           if (!attrCode || BASE_FIELDS.includes(attrCode)) continue;
           if (!attrConfig[attrCode] || !attrConfig[attrCode].isVariantOnly) continue;
 
           const cellVal = row[c];
-          
-          if (attrCode === 'price_group') {
-            if (cellVal) {
-              priceGroupExtCode = mappings['price_group:' + cellVal] || ('pg_' + generateSlug(cellVal));
-            }
-            continue;
-          }
-
           const formatted = formatEavValue(attrCode, cellVal);
           if (formatted !== undefined) {
             variantEav[attrCode] = formatted;
@@ -263,7 +263,7 @@ function exportCatalogJson() {
     pgReader.rows.forEach(row => {
       const extCode = pgReader.getVal(row, 'external_code');
       if (!extCode) return;
-      
+
       jsonExport.price_groups.push({
         "external_code": extCode,
         "product_family_external_code": pgReader.getVal(row, 'family_code') ? ("fam_" + pgReader.getVal(row, 'family_code')) : null,
@@ -275,8 +275,7 @@ function exportCatalogJson() {
         "meta": {
           "purchase_cost": parseFloat(pgReader.getVal(row, 'purchase_cost')) || 0,
           "purchase_currency": pgReader.getVal(row, 'purchase_currency') || 'USD',
-          "markup_retail": parseFloat(pgReader.getVal(row, 'markup_retail')) || 0,
-          "markup_dealer": parseFloat(pgReader.getVal(row, 'markup_dealer')) || 0
+          "markup_retail": parseFloat(pgReader.getVal(row, 'markup_retail')) || 0
         }
       });
     });
@@ -287,13 +286,13 @@ function exportCatalogJson() {
     familiesReader.rows.forEach(row => {
       const code = familiesReader.getVal(row, 'code');
       if (!code) return;
-      
+
       jsonExport.families.push({
         "external_code": familiesReader.getVal(row, 'external_code') || ("fam_" + code),
         "code": code,
-        "name": { 
-          "ru": familiesReader.getVal(row, 'name_ru'), 
-          "en": familiesReader.getVal(row, 'name_en') 
+        "name": {
+          "ru": familiesReader.getVal(row, 'name_ru'),
+          "en": familiesReader.getVal(row, 'name_en')
         },
         "meta_schema": familiesReader.getVal(row, 'meta_schema') ? JSON.parse(familiesReader.getVal(row, 'meta_schema')) : undefined
       });
@@ -304,7 +303,7 @@ function exportCatalogJson() {
     const tRows = typesSheet.getDataRange().getValues();
     for (let i = 1; i < tRows.length; i++) {
       if (!tRows[i][0]) continue;
-      
+
       const attached = [];
       for (let col = 4; col < typeHeaders.length; col++) {
         const attrCode = typeHeaders[col];
@@ -350,14 +349,14 @@ function exportCatalogJson() {
     catReader.rows.forEach(row => {
       const extCode = catReader.getVal(row, 'external_code');
       if (!extCode) return;
-      
+
       jsonExport.categories.push({
         "external_code": extCode,
         "parent_external_code": catReader.getVal(row, 'parent_external_code') || null,
         "slug": catReader.getVal(row, 'slug'),
-        "name": { 
-          "ru": catReader.getVal(row, 'name_ru'), 
-          "en": catReader.getVal(row, 'name_en') 
+        "name": {
+          "ru": catReader.getVal(row, 'name_ru'),
+          "en": catReader.getVal(row, 'name_en')
         }
       });
     });
@@ -397,12 +396,12 @@ function exportCatalogJson() {
       }
 
       const recMeta = {};
-      
+
       const k1 = compReader.getVal(row, 'k1');
       const v1 = compReader.getVal(row, 'v1');
       const k2 = compReader.getVal(row, 'k2');
       const v2 = compReader.getVal(row, 'v2');
-      const k3 = compReader.getVal(row, 'k3'); 
+      const k3 = compReader.getVal(row, 'k3');
       const v3 = compReader.getVal(row, 'v3');
 
       const parseValue = (val) => {
@@ -412,7 +411,7 @@ function exportCatalogJson() {
         const num = parseFloat(val);
         return isNaN(num) ? val : num;
       };
-      
+
       if (k1) recMeta[k1] = parseValue(v1);
       if (k2) recMeta[k2] = parseValue(v2);
       if (k3) recMeta[k3] = parseValue(v3);
@@ -427,39 +426,45 @@ function exportCatalogJson() {
         "meta": recMeta
       });
     });
-    
+
     jsonExport.complex_dictionaries = Object.values(complexDictsMap);
   }
 
   const attributesMap = {};
-  for (let i = 1; i < attrRowsData.length; i++) {
-    const code = attrRowsData[i][0];
-    if (!code || code === 'price_group') continue;
-    attributesMap[code] = {
-      "external_code": "attr_" + code,
-      "code": code,
-      "type": attrRowsData[i][3],
-      "name": { "ru": attrRowsData[i][1], "en": attrRowsData[i][2] },
-      "is_multiple": String(attrRowsData[i][4]).toUpperCase() === 'TRUE',
-      "options": []
-    };
+  // ИСПРАВЛЕНО: Заменен вызов неопределенной переменной attrRowsData на валидный attrReader2.rows [1]
+  if (attrReader2) {
+    attrReader2.rows.forEach(row => {
+      const code = attrReader2.getVal(row, 'code');
+      if (!code || code === 'price_group') return;
+      attributesMap[code] = {
+        "external_code": "attr_" + code,
+        "code": code,
+        "type": attrReader2.getVal(row, 'type'),
+        "name": {
+          "ru": attrReader2.getVal(row, 'name_ru'),
+          "en": attrReader2.getVal(row, 'name_en')
+        },
+        "is_multiple": String(attrReader2.getVal(row, 'is_multiple')).toUpperCase() === 'TRUE',
+        "options": []
+      };
+    });
   }
 
-  if (optReader2) {
-    optReader2.rows.forEach(row => {
-      const code = optReader2.getVal(row, 'attribute_code');
+  if (optReader) {
+    optReader.rows.forEach(row => {
+      const code = optReader.getVal(row, 'attribute_code');
       if (!code || !attributesMap[code] || code === 'price_group') return;
-      
+
       attributesMap[code].options.push({
-        "external_code": optReader2.getVal(row, 'external_code'),
-        "slug": optReader2.getVal(row, 'slug'),
-        "value": { 
-          "ru": optReader2.getVal(row, 'value_ru'), 
-          "en": optReader2.getVal(row, 'value_en') 
+        "external_code": optReader.getVal(row, 'external_code'),
+        "slug": optReader.getVal(row, 'slug'),
+        "value": {
+          "ru": optReader.getVal(row, 'value_ru'),
+          "en": optReader.getVal(row, 'value_en')
         },
         "meta": {
-          "hex": optReader2.getVal(row, 'hex') || null,
-          "image": cleanUrl(optReader2.getVal(row, 'image'))
+          "hex": optReader.getVal(row, 'hex') || null,
+          "image": cleanUrl(optReader.getVal(row, 'image'))
         }
       });
     });
@@ -471,6 +476,6 @@ function exportCatalogJson() {
     `<p>Скопируйте JSON и сохраните его в файл <b>import_ready_filtered.json</b>:</p>
      <textarea style="width: 100%; height: 350px;" readonly onClick="this.select();">${jsonString}</textarea>`
   ).setWidth(600).setHeight(450);
-  
+
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Экспорт завершен');
 }

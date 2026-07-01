@@ -1,12 +1,12 @@
 function onOpen() {
   const ui = SpreadsheetApp.getUi();
-  ui.createMenu('VMS Каталог')
-    .addItem('1. Инициализировать базовые настройки', 'bootstrapConfigSheets')
-    .addItem('2. Создать/Обновить рабочие листы товаров', 'setupWorkingSheets')
+  ui.createMenu('VMS Catalog')
+    .addItem('1. Initialize basic configurations', 'bootstrapConfigSheets')
+    .addItem('2. Create/Update product working sheets', 'setupWorkingSheets')
     .addSeparator()
-    .addItem('3. Синхронизировать новые опции', 'syncNewDataFromWorkingSheets')
+    .addItem('3. Synchronize new options', 'syncNewDataFromWorkingSheets')
     .addSeparator()
-    .addItem('4. Экспортировать данные в JSON', 'exportCatalogJson')
+    .addItem('4. Export data to JSON', 'exportCatalogJson')
     .addToUi();
 }
 
@@ -34,12 +34,12 @@ function bootstrapConfigSheets() {
   });
 
   applyConfigValidations(ss);
-  SpreadsheetApp.getUi().alert('Инициализация', 'Таблицы успешно подготовлены! На листе cfg_types теперь доступна матрица чекбоксов.', SpreadsheetApp.getUi().ButtonSet.OK);
+  SpreadsheetApp.getUi().alert('Initialization', 'Tables successfully prepared! Interactive checkboxes are now available on the cfg_types sheet.', SpreadsheetApp.getUi().ButtonSet.OK);
 }
 
 function getDropdownData(ss) {
   const dropdowns = { 'category': [], '_AllAttributes': [] };
-  
+
   const catReader = getRowReader(ss.getSheetByName('cfg_categories'));
   if (catReader) {
     catReader.rows.forEach(row => {
@@ -47,7 +47,7 @@ function getDropdownData(ss) {
       if (nameRu) dropdowns['category'].push(String(nameRu));
     });
   }
-  
+
   const optReader = getRowReader(ss.getSheetByName('cfg_options'));
   if (optReader) {
     optReader.rows.forEach(row => {
@@ -80,15 +80,17 @@ function getDropdownData(ss) {
       if (nameRu) dropdowns['price_group'].push(String(nameRu));
     });
   }
-  
+
   const attrReader = getRowReader(ss.getSheetByName('cfg_attributes'));
   if (attrReader) {
     attrReader.rows.forEach(row => {
       const code = attrReader.getVal(row, 'code');
-      if (code) dropdowns['_AllAttributes'].push(String(code));
+      if (code) {
+        dropdowns['_AllAttributes'].push(String(code));
+      }
     });
   }
-  
+
   return dropdowns;
 }
 
@@ -118,7 +120,11 @@ function applyConfigValidations(ss) {
     const lastRow = typesSheet.getLastRow();
     if (lastCol >= 5 && lastRow > 1) {
       const checkboxRange = typesSheet.getRange(2, 5, lastRow - 1, lastCol - 4);
+
+      // Исправлено: Сбрасываем Plain Text форматирование ячеек перед наложением валидации [1]
+      checkboxRange.clearFormat();
       checkboxRange.clearDataValidations();
+
       const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
       checkboxRange.setDataValidation(checkboxRule);
     }
@@ -129,7 +135,7 @@ function getSortedColumnList() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName('cfg_column_order');
   const orderMap = {};
-  
+
   if (sheet) {
     const rows = sheet.getDataRange().getValues();
     for (let i = 1; i < rows.length; i++) {
@@ -147,13 +153,13 @@ function setupWorkingSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const typesSheet = ss.getSheetByName('cfg_types');
   const attrSheet = ss.getSheetByName('cfg_attributes');
-  
+
   if (!typesSheet || !attrSheet) {
-    SpreadsheetApp.getUi().alert('Ошибка', 'Сначала выполните шаг 1.', SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert('Error', 'Please run Step 1 first.', SpreadsheetApp.getUi().ButtonSet.OK);
     return;
   }
 
-  applyConfigValidations(ss); 
+  applyConfigValidations(ss);
   const dropdowns = getDropdownData(ss);
   const orderMap = getSortedColumnList();
 
@@ -200,7 +206,7 @@ function setupWorkingSheets() {
     });
 
     const labelsMap = {
-      'base_ext_code': 'ID Базового Товара',
+      'base_ext_code': 'Внешний код',
       'base_name': 'Название (Заполнять 1 раз на товар)',
       'base_slug': 'ЧПУ (Slug)',
       'base_category': 'Категория',
@@ -240,24 +246,24 @@ function setupWorkingSheets() {
 
     sheet.clear();
     sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).clearDataValidations();
-    
+
     sheet.getRange(1, 1, 1, targetHeaders.length).setValues([targetHeaders]);
     sheet.getRange(2, 1, 1, targetLabels.length).setValues([targetLabels]);
-    
+
     if (mappedDataRows.length > 0) {
       sheet.getRange(3, 1, mappedDataRows.length, targetHeaders.length).setValues(mappedDataRows);
     }
-    
+
     sheet.getRange(1, 1, 1, targetHeaders.length).setBackground('#f3f4f6').setFontColor('#9ca3af').setFontWeight('normal');
     sheet.getRange(2, 1, 1, targetLabels.length).setBackground('#000033').setFontColor('#ffffff').setFontWeight('bold');
-    
+
     sheet.setFrozenRows(2);
 
     const validations = [];
     const addVal = (code, list, listKey) => {
-      const colIdx = targetHeaders.indexOf(code);
-      if (colIdx !== -1) {
-        validations.push({ col: colIdx + 1, list: list, listKey: listKey });
+      const colIndex = targetHeaders.indexOf(code);
+      if (colIndex !== -1) {
+        validations.push({ col: colIndex + 1, list: list, listKey: listKey });
       }
     };
 
@@ -269,12 +275,12 @@ function setupWorkingSheets() {
 
     attachedAttrs.forEach(attrCode => {
       if (!attrMap[attrCode]) return;
-      const colIdx = targetHeaders.indexOf(attrCode);
-      if (colIdx !== -1) {
+      const colIndex = targetHeaders.indexOf(attrCode);
+      if (colIndex !== -1) {
         if (attrMap[attrCode].type === 'dictionary' || attrMap[attrCode].type === 'complex_reference') {
-          validations.push({ col: colIdx + 1, listKey: attrCode });
+          validations.push({ col: colIndex + 1, listKey: attrCode });
         } else if (attrMap[attrCode].type === 'boolean') {
-          validations.push({ col: colIdx + 1, list: ['TRUE', 'FALSE'] });
+          validations.push({ col: colIndex + 1, list: ['TRUE', 'FALSE'] });
         }
       }
     });
@@ -290,28 +296,28 @@ function setupWorkingSheets() {
         }
       }
     });
-    
+
     sheet.autoResizeColumns(1, targetHeaders.length);
   }
 }
 
 function syncNewDataFromWorkingSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  
+
   const catSheet = ss.getSheetByName('cfg_categories');
   const attrSheet = ss.getSheetByName('cfg_attributes');
   const optSheet = ss.getSheetByName('cfg_options');
   const typesSheet = ss.getSheetByName('cfg_types');
   const pgSheet = ss.getSheetByName('cfg_price_groups');
-  
+
   if (!catSheet || !attrSheet || !optSheet || !typesSheet) {
-    SpreadsheetApp.getUi().alert('Ошибка', 'Один из листов конфигурации отсутствует.', SpreadsheetApp.getUi().ButtonSet.OK);
+    SpreadsheetApp.getUi().alert('Error', 'Configuration sheets are missing.', SpreadsheetApp.getUi().ButtonSet.OK);
     return;
   }
 
   const knownCategories = new Set(catSheet.getRange(2, 4, Math.max(1, catSheet.getLastRow() - 1), 1).getValues().flat().filter(String));
   const knownAttrs = new Set(attrSheet.getRange(2, 1, Math.max(1, attrSheet.getLastRow() - 1), 1).getValues().flat().filter(String));
-  
+
   const attrRows = attrSheet.getDataRange().getValues();
   const attrTypeMap = {};
   for (let i = 1; i < attrRows.length; i++) {
@@ -358,8 +364,8 @@ function syncNewDataFromWorkingSheets() {
     const lblHeaders = rows[1];
 
     const getVal = (code, row) => {
-      const idx = sysHeaders.indexOf(code);
-      return idx !== -1 ? row[idx] : null;
+      const colIndex = sysHeaders.indexOf(code);
+      return colIndex !== -1 ? row[colIndex] : null;
     };
 
     for (let c = 0; c < sysHeaders.length; c++) {
@@ -378,11 +384,11 @@ function syncNewDataFromWorkingSheets() {
       if (colIdx === -1) {
         const newColNum = typeHeaders.length + 1;
         typesSheet.getRange(1, newColNum).setValue(attrCode);
-        
+
         const lastRow = typesSheet.getLastRow();
         const checkboxRule = SpreadsheetApp.newDataValidation().requireCheckbox().build();
         typesSheet.getRange(2, newColNum, lastRow - 1, 1).setDataValidation(checkboxRule);
-        
+
         typeHeaders.push(attrCode);
         colIdx = typeHeaders.indexOf(attrCode);
 
@@ -393,32 +399,34 @@ function syncNewDataFromWorkingSheets() {
           colOrderSheet.appendRow([attrCode, lastVal + 10]);
         }
       }
-      
-      typesSheet.getRange(tIdx + 1, colIdx + 1).setValue(true);
+
+      $this = null;
     }
 
-    for (let r = 2; r < rows.length; r++) {
-      const pgVal = String(getVal('price_group', rows[r])).trim();
+    for (let rIdx = 2; rIdx < rows.length; rIdx++) {
+      const row = rows[rIdx];
+
+      const pgVal = String(getVal('price_group', row)).trim();
       if (pgVal !== '' && pgVal !== 'null') {
         const pgSlug = cleanSlug(pgVal);
         if (!knownPriceGroups.has(pgSlug) && pgSheet) {
+          // Исправлено: Пишем только одну наценку (8 колонок) [1]
           pgSheet.appendRow([
-            familyCode,           
-            'pg_' + pgSlug,       
-            pgVal,                
-            pgVal,                
-            pgVal,                
-            0,                    
-            'USD',                
-            30,                   
-            10                    
+            familyCode,
+            'pg_' + pgSlug,
+            pgVal,
+            pgVal,
+            pgVal,
+            0,
+            'USD',
+            30
           ]);
           knownPriceGroups.add(pgSlug);
           newPg++;
         }
       }
 
-      const catVal = getVal('base_category', rows[r]);
+      const catVal = getVal('base_category', row);
       if (catVal && !knownCategories.has(catVal)) {
         catSheet.appendRow([getExtCode('cat', catVal), '', generateSlug(catVal), catVal, transliterate(catVal)]);
         knownCategories.add(catVal);
@@ -431,7 +439,7 @@ function syncNewDataFromWorkingSheets() {
 
         const attrType = attrTypeMap[attrCode];
         if (attrType === 'dictionary') {
-          const cellVal = String(rows[r][c]).trim();
+          const cellVal = String(row[c]).trim();
           if (cellVal !== '') {
             const checkKey = attrCode + ':' + cellVal;
             if (!knownOptions.has(checkKey)) {
@@ -446,5 +454,5 @@ function syncNewDataFromWorkingSheets() {
   }
 
   setupWorkingSheets();
-  SpreadsheetApp.getUi().alert('Синхронизация завершена', `Новых категорий: ${newCat}\nНовых колонок: ${newAttr}\nНовых опций: ${newOpt}\nНовых ценовых групп: ${newPg}\n\nСписки успешно обновлены!`, SpreadsheetApp.getUi().ButtonSet.OK);
+  SpreadsheetApp.getUi().alert('Синхронизация завершена', `Новых категорий: ${newCat}\nНовых колонок: ${newAttr}\nНовых опций: ${newOpt}\nНовых ценовых групп: ${newPg}\n\nНастройки успешно синхронизированы.`, SpreadsheetApp.getUi().ButtonSet.OK);
 }
