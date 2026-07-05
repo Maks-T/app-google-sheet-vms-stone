@@ -52,7 +52,6 @@ function exportCatalogJson() {
       const slug = pgReader.getVal(row, 'slug');
       const nameRu = pgReader.getVal(row, 'name_ru');
       if (extCode) {
-        // Оптимизировано: Приводим ключи карты к нижнему регистру для регистронезависимого поиска [1]
         if (slug) mappings['price_group:' + String(slug).toLowerCase().trim()] = extCode;
         if (nameRu) mappings['price_group:' + String(nameRu).toLowerCase().trim()] = extCode;
       }
@@ -69,6 +68,19 @@ function exportCatalogJson() {
           isVariantOnly: String(attrReader2.getVal(row, 'is_variant_only')).toUpperCase() === 'TRUE',
           type: String(attrReader2.getVal(row, 'type')).toLowerCase()
         };
+      }
+    });
+  }
+
+  // Создаем карту соответствия кодов семейств их внешним кодам из cfg_families
+  const familyCodeToExtMap = {};
+  const familiesReader = getRowReader(familiesSheet);
+  if (familiesReader) {
+    familiesReader.rows.forEach(row => {
+      const code = familiesReader.getVal(row, 'code');
+      const extCode = familiesReader.getVal(row, 'external_code');
+      if (code && extCode) {
+        familyCodeToExtMap[String(code).trim().toLowerCase()] = String(extCode).trim();
       }
     });
   }
@@ -133,6 +145,7 @@ function exportCatalogJson() {
       const rawName = getVal('base_name');
       let sku = getVal('sku_code');
       const skuCost = getVal('sku_cost');
+      const skuName = getVal('sku_name');
 
       const hasAnyData = row.some(cell => cell !== null && cell !== "");
       if (!hasAnyData) continue;
@@ -181,7 +194,6 @@ function exportCatalogJson() {
         let hasVariantAttr = false;
         let priceGroupExtCode = null;
 
-        // ИСПРАВЛЕНО: Считываем ценовую группу как системное базовое поле напрямую [1]
         const rawPriceGroup = getVal('price_group');
         if (rawPriceGroup) {
           const cleanKey = String(rawPriceGroup).toLowerCase().trim();
@@ -202,14 +214,18 @@ function exportCatalogJson() {
         }
 
         const isDefaultStr = String(getVal('sku_default')).toUpperCase();
-        const hasSkuData = sku || skuCost || isDefaultStr === 'TRUE' || isDefaultStr === 'FALSE' || hasVariantAttr || priceGroupExtCode;
+        const hasSkuData = sku || skuCost || skuName || isDefaultStr === 'TRUE' || isDefaultStr === 'FALSE' || hasVariantAttr || priceGroupExtCode;
 
         if (hasSkuData) {
           if (!sku) {
             let variantParts = [];
-            for (let key in variantEav) {
-              const val = variantEav[key];
-              variantParts.push(generateSlug(val));
+            if (skuName) {
+              variantParts.push(generateSlug(skuName));
+            } else {
+              for (let key in variantEav) {
+                const val = variantEav[key];
+                variantParts.push(generateSlug(val));
+              }
             }
             if (variantParts.length > 0) {
               sku = prodSlug + '-' + variantParts.join('-');
@@ -225,6 +241,7 @@ function exportCatalogJson() {
           const variantObj = {
             "external_code": "sku_" + sku,
             "sku": sku,
+            "name": skuName ? { "ru": skuName, "en": transliterate(skuName) } : null,
             "price_group_external_code": priceGroupExtCode,
             "stock": stock,
             "is_default": isDefaultStr === 'TRUE',
@@ -264,13 +281,19 @@ function exportCatalogJson() {
       const extCode = pgReader.getVal(row, 'external_code');
       if (!extCode) return;
 
+      const famCode = pgReader.getVal(row, 'family_code');
+
       jsonExport.price_groups.push({
         "external_code": extCode,
-        "product_family_external_code": pgReader.getVal(row, 'family_code') ? ("fam_" + pgReader.getVal(row, 'family_code')) : null,
+        "product_family_external_code": famCode ? (familyCodeToExtMap[String(famCode).trim().toLowerCase()] || ("fam_" + String(famCode).trim().replace('-', '_'))) : null,
         "slug": String(pgReader.getVal(row, 'slug')),
         "name": {
           "ru": pgReader.getVal(row, 'name_ru'),
           "en": pgReader.getVal(row, 'name_en') || undefined
+        },
+        "description": {
+          "ru": pgReader.getVal(row, 'description_ru') || undefined,
+          "en": pgReader.getVal(row, 'description_en') || undefined
         },
         "meta": {
           "purchase_cost": parseFloat(pgReader.getVal(row, 'purchase_cost')) || 0,
@@ -281,7 +304,6 @@ function exportCatalogJson() {
     });
   }
 
-  const familiesReader = getRowReader(familiesSheet);
   if (familiesReader) {
     familiesReader.rows.forEach(row => {
       const code = familiesReader.getVal(row, 'code');
@@ -322,18 +344,18 @@ function exportCatalogJson() {
       let pricingField = null;
 
       if (tRows[i][0] === 'acrylic_stone') {
-        meta = { "step": 0.5, "maxStack": 1, "axisX": true, "minPart": 12, "is_separate": false, "corner_add_length": 920, "corner_add_width": 760 };
+        meta = { "step": 0.5, "maxStack": 1, "axisX": true, "minPart": 12, "is_separate": false, "corner_add_length": 920, "corner_add_width": 760,  "allow_rounding": true};
         pricingMode = "complex_dictionary";
         pricingField = "purchase_cost";
       } else if (tRows[i][0] === 'quartz_stone') {
-        meta = { "step": 1, "maxStack": 1, "axisX": false, "minPart": 20, "is_separate": true, "corner_add_length": 750, "corner_add_width": 700 };
+        meta = { "step": 1, "maxStack": 1, "axisX": false, "minPart": 20, "is_separate": true, "corner_add_length": 750, "corner_add_width": 700,  "allow_rounding": false};
         pricingMode = "complex_dictionary";
         pricingField = "purchase_cost";
       }
 
       jsonExport.types.push({
         "external_code": "type_" + tRows[i][0],
-        "family_external_code": "fam_" + tRows[i][1],
+        "family_external_code": familyCodeToExtMap[String(tRows[i][1]).trim().toLowerCase()] || ("fam_" + String(tRows[i][1]).trim().replace('-', '_')),
         "code": tRows[i][0],
         "name": { "ru": tRows[i][2], "en": tRows[i][3] },
         "meta": meta,
@@ -431,7 +453,6 @@ function exportCatalogJson() {
   }
 
   const attributesMap = {};
-  // ИСПРАВЛЕНО: Заменен вызов неопределенной переменной attrRowsData на валидный attrReader2.rows [1]
   if (attrReader2) {
     attrReader2.rows.forEach(row => {
       const code = attrReader2.getVal(row, 'code');

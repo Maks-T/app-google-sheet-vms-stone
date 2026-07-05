@@ -1,6 +1,6 @@
 const BASE_FIELDS = [
   'base_ext_code', 'base_name', 'base_slug', 'base_category',
-  'base_image', 'sku_code', 'sku_image', 'sku_cost',
+  'base_image', 'sku_name', 'sku_code', 'sku_image', 'sku_cost',
   'sku_currency', 'sku_default', 'sku_stock', 'sku_manual', 'price_group'
 ];
 
@@ -369,7 +369,7 @@ function getConfigDefs() {
 
   const baseFields = [
     'base_ext_code', 'base_name', 'base_slug', 'base_category',
-    'base_image', 'sku_code', 'sku_image', 'sku_cost',
+    'base_image', 'sku_name', 'sku_code', 'sku_image', 'sku_cost',
     'sku_currency', 'sku_default', 'sku_stock', 'sku_manual', 'price_group'
   ];
 
@@ -379,6 +379,7 @@ function getConfigDefs() {
     'base_slug': { name: 'ЧПУ (Slug)', desc: 'Адрес страницы товара на сайте (URL). Заполняется один раз на товар.' },
     'base_category': { name: 'Категория', desc: 'Раздел каталога, в который будет помещен товар. Выбирается из списка.' },
     'base_image': { name: 'Картинка товара (URL)', desc: 'Основная ссылка на изображение товара.' },
+    'sku_name': { name: 'Название модификации', desc: 'Название конкретной модификации (вариации) товара.' },
     'sku_code': { name: 'Артикул модификации (SKU)', desc: 'Уникальный артикул конкретной модификации (вариации).' },
     'sku_image': { name: 'Картинка модификации (URL)', desc: 'Ссылка на изображение конкретной модификации.' },
     'sku_cost': { name: 'Себестоимость', desc: 'Стоимость закупки или базовая цена модификации.' },
@@ -427,7 +428,7 @@ function getConfigDefs() {
       ['attribute_code', 'external_code', 'slug', 'value_ru', 'value_en', 'hex', 'image']
     ],
     "cfg_price_groups": [
-      ['family_code', 'external_code', 'slug', 'name_ru', 'name_en', 'purchase_cost', 'purchase_currency', 'markup_retail']
+      ['family_code', 'external_code', 'slug', 'name_ru', 'name_en', 'description_ru', 'description_en', 'purchase_cost', 'purchase_currency', 'markup_retail']
     ],
     "cfg_complex_dicts": [
       ['dict_code', 'external_code', 'slug', 'name_ru', 'name_en', 'k1', 'v1', 'k2', 'v2', 'k3', 'v3']

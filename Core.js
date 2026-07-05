@@ -211,6 +211,7 @@ function setupWorkingSheets() {
       'base_slug': 'ЧПУ (Slug)',
       'base_category': 'Категория',
       'base_image': 'Картинка товара (URL)',
+      'sku_name': 'Название модификации',
       'sku_code': 'Артикул модификации (SKU)',
       'sku_image': 'Картинка модификации (URL)',
       'sku_cost': 'Себестоимость',
@@ -417,6 +418,8 @@ function syncNewDataFromWorkingSheets() {
             pgVal,
             pgVal,
             pgVal,
+            '', // description_ru 
+            '', // description_en
             0,
             'USD',
             30
