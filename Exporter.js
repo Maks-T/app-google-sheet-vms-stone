@@ -143,6 +143,7 @@ function exportCatalogJson() {
 
       const rawExtCode = getVal('base_ext_code');
       const rawName = getVal('base_name');
+      const rawCode = getVal('base_code');
       let sku = getVal('sku_code');
       const skuCost = getVal('sku_cost');
       const skuName = getVal('sku_name');
@@ -159,11 +160,15 @@ function exportCatalogJson() {
 
         if (!productsMap[currentProductExtCode]) {
           const catName = getVal('base_category');
+
+          const catalogTypeVal = (typeCode === 'service') ? 'service' : 'product';
+
           productsMap[currentProductExtCode] = {
             "external_code": currentProductExtCode,
             "product_type_external_code": "type_" + typeCode,
             "category_external_code": mappings['category:' + catName] || null,
-            "catalog_type": "product",
+            "catalog_type": catalogTypeVal,
+            "code": rawCode ? String(rawCode).trim() : prodSlug, // Инкапсулируем base_code во внешний ключ code
             "unit_code": "pcs",
             "slug": prodSlug,
             "name": { "ru": rawName, "en": transliterate(rawName) },
@@ -494,7 +499,7 @@ function exportCatalogJson() {
 
   const jsonString = JSON.stringify(jsonExport, null, 2);
   const htmlOutput = HtmlService.createHtmlOutput(
-    `<p>Скопируйте JSON и сохраните его в файл <b>import_ready_filtered.json</b>:</p>
+      `<p>Скопируйте JSON и сохраните его в файл <b>import_ready_filtered.json</b>:</p>
      <textarea style="width: 100%; height: 350px;" readonly onClick="this.select();">${jsonString}</textarea>`
   ).setWidth(600).setHeight(450);
 
