@@ -207,6 +207,7 @@ function setupWorkingSheets() {
 
     const labelsMap = {
       'base_ext_code': 'Внешний код',
+      'base_code': 'Код товара',
       'base_name': 'Название (Заполнять 1 раз на товар)',
       'base_slug': 'ЧПУ (Slug)',
       'base_category': 'Категория',

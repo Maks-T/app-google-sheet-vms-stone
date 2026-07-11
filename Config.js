@@ -1,5 +1,5 @@
 const BASE_FIELDS = [
-  'base_ext_code', 'base_name', 'base_slug', 'base_category',
+  'base_ext_code', 'base_code', 'base_name', 'base_slug', 'base_category',
   'base_image', 'sku_name', 'sku_code', 'sku_image', 'sku_cost',
   'sku_currency', 'sku_default', 'sku_stock', 'sku_manual', 'price_group'
 ];
@@ -368,13 +368,14 @@ function getConfigDefs() {
   }
 
   const baseFields = [
-    'base_ext_code', 'base_name', 'base_slug', 'base_category',
+    'base_ext_code', 'base_code',  'base_name', 'base_slug', 'base_category',
     'base_image', 'sku_name', 'sku_code', 'sku_image', 'sku_cost',
     'sku_currency', 'sku_default', 'sku_stock', 'sku_manual', 'price_group'
   ];
 
   const defaultMeta = {
     'base_ext_code': { name: 'Внешний код', desc: 'Уникальный внешний идентификатор базового товара. Заполняется один раз на товар.' },
+    'base_code': { name: 'Код товара', desc: 'Уникальный системный артикул базового товара. Заполняется один раз на товар.' },
     'base_name': { name: 'Название товара', desc: 'Полноценное название товара. Заполняется один раз на товар.' },
     'base_slug': { name: 'ЧПУ (Slug)', desc: 'Адрес страницы товара на сайте (URL). Заполняется один раз на товар.' },
     'base_category': { name: 'Категория', desc: 'Раздел каталога, в который будет помещен товар. Выбирается из списка.' },
