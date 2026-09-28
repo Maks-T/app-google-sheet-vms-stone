@@ -1,126 +1,150 @@
 /**
- * Generates a clean URL slug from text using transliteration.
- *
- * @param {string} text Input text.
- * @return {string} Generated slug.
- * @customfunction
+ * Utils.js — Системные константы, схемы листов и вспомогательные утилиты для GreenDecks VMS-NC
  */
-function generateSlug(text) {
-  if (Array.isArray(text)) {
-    return text.map(row => Array.isArray(row) ? row.map(generateSlug) : generateSlug(row));
+
+const GDK_CONFIG = {
+  CURRENCY: 'KZT',
+  BASE_URL: 'https://greendecks.kz',
+
+  // Точные коды типов товаров платформы VMS-NC
+  PRODUCT_TYPES: {
+    'terraceBoard': 'type_terraceBoard',
+    'board': 'type_board',
+    'stepBoard': 'type_stepBoard',
+    'brackets': 'type_brackets',
+    'decorProducts': 'type_decorProducts',
+    'joist': 'type_joist'
+  },
+
+  // Системные UUID категорий калькулятора (из эталона import_data.json)
+  CALC_CATEGORIES: {
+    'terraceBoard': 'f094F3QohaIRmvFaEAmJe2',
+    'board': 'DbCTg4CIhiUHCNZZ28u2Q3',
+    'stepBoard': 'W3licD2wgMnrMppMVZ7Yo0',
+    'brackets': '7-ZHjGVRi90X2pkVocJLo1',
+    'decorProducts': '635W7TuejTCwFMGmOmgSQ2',
+    'joist': '7-ZHjGVRi90X2pkVocJLo1'
+  },
+
+  // Единая схема колонок для всех самодостаточных листов каталога
+  SHEET_COLUMNS: [
+    'status',
+    'product_code',
+    'sku',
+    'name',
+    'brand',
+    'material',
+    'color_name',
+    'color_slug',
+    'color_hex',
+    'length_mm',
+    'width_mm',
+    'thickness_mm',
+    'price_retail',
+    'cost_price',
+    'image_url',
+    'product_url',
+    'comment'
+  ],
+
+  COLUMN_NOTES: [
+    'Статус: В очереди / Готов / Ошибка',
+    'Системный код товара (external_code: gdk_...)',
+    'Артикул модификации SKU',
+    'Наименование товара',
+    'Бренд (opt_brand_...)',
+    'Материал изделия',
+    'Наименование цвета',
+    'Слаг цвета',
+    'HEX-код цвета',
+    'Длина, мм',
+    'Ширина, мм',
+    'Толщина, мм',
+    'Розничная цена, KZT',
+    'Себестоимость, KZT',
+    'Ссылка на фото (CDN)',
+    'URL страницы товара',
+    'Результат и логи'
+  ]
+};
+
+function applyHeaderStyles(sheet, headers, notes) {
+  const range = sheet.getRange(1, 1, 1, headers.length);
+  range.setValues([headers]);
+  range.setBackground('#334155');
+  range.setFontColor('#FFFFFF');
+  range.setFontWeight('bold');
+  range.setFontSize(10);
+  range.setVerticalAlignment('middle');
+  range.setHorizontalAlignment('center');
+
+  for (let i = 0; i < notes.length; i++) {
+    sheet.getRange(1, i + 1).setNote(notes[i]);
   }
-  return transliterate(text).replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+
+  sheet.setRowHeight(1, 32);
+  sheet.setFrozenRows(1);
 }
 
 /**
- * Generates a unique external code with a custom prefix.
- *
- * @param {string} prefix Code prefix.
- * @param {string} text Base text.
- * @return {string} Unique code.
- * @customfunction
+ * Настройка оформления любого самодостаточного листа каталога
  */
-function getExtCode(prefix, text) {
-  if (Array.isArray(text)) {
-    return text.map(row => Array.isArray(row) ? row.map(t => getExtCode(prefix, t)) : getExtCode(prefix, row));
+function setupSelfSufficientSheetLayout(sheet) {
+  sheet.clear();
+  applyHeaderStyles(sheet, GDK_CONFIG.SHEET_COLUMNS, GDK_CONFIG.COLUMN_NOTES);
+
+  const statusRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(['В очереди', 'Готов', 'Ошибка'], true)
+    .build();
+  sheet.getRange('A2:A2000').setDataValidation(statusRule);
+
+  // Форматирование чисел и валюты KZT
+  sheet.getRange('J2:L2000').setNumberFormat('#,##0');
+  sheet.getRange('M2:N2000').setNumberFormat('#,##0 "₸"');
+
+  autoFitColumns(sheet, GDK_CONFIG.SHEET_COLUMNS.length);
+  sheet.setColumnWidth(4, 280); // колонка name
+  sheet.setColumnWidth(16, 260); // колонка product_url
+}
+
+function autoFitColumns(sheet, count) {
+  for (let col = 1; col <= count; col++) {
+    sheet.autoResizeColumn(col);
+    const width = sheet.getColumnWidth(col);
+    sheet.setColumnWidth(col, Math.max(width + 20, 115));
   }
-  return prefix + '_' + generateSlug(text).substring(0, 30) + '_' + Math.floor(Math.random() * 1000);
+}
+
+function setColumnValidation(sheet, rangeA1, valuesList, allowInvalid) {
+  if (!valuesList || valuesList.length === 0) return;
+  const rule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(valuesList, true)
+    .setAllowInvalid(!!allowInvalid)
+    .build();
+  sheet.getRange(rangeA1).setDataValidation(rule);
+}
+
+function getOrCreateSheet(ss, name) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) {
+    sheet = ss.insertSheet(name);
+  }
+  return sheet;
 }
 
 /**
- * Generates a structured SKU from article, name, and dimensions.
- *
- * @param {string} article Supplier article.
- * @param {string} name Product name.
- * @param {number} [length] Product length.
- * @param {number} [width] Product width.
- * @param {number} [thickness] Product thickness.
- * @return {string} Concatenated SKU.
- * @customfunction
+ * Генерация системного внешнего кода товара в формате gdk_brand_slug_dims
  */
-function GENERATE_SKU(article, name, length, width, thickness) {
-  if (Array.isArray(article)) {
-    return article.map((row, rIdx) => {
-      const art = getValFromMatrix(article, rIdx, 0);
-      const nm = getValFromMatrix(name, rIdx, 0);
-      const l = getValFromMatrix(length, rIdx, 0);
-      const w = getValFromMatrix(width, rIdx, 0);
-      const t = getValFromMatrix(thickness, rIdx, 0);
-      return buildSimpleSku(art, nm, l, w, t);
-    });
-  }
-  
-  return buildSimpleSku(article, name, length, width, thickness);
-}
+function generateGdkExternalCode(brandCode, slugOrName, width, thickness) {
+  const brandShort = (brandCode || '').replace(/^opt_brand_/, '').replace(/-/g, '_');
+  let cleanSlug = (slugOrName || '')
+    .toLowerCase()
+    .replace(/https?:\/\/[^\/]+\/katalog\/item\//, '')
+    .replace(/[^a-z0-9_]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .substring(0, 30);
 
-function cleanUrl(val) {
-  if (val === null || val === undefined) return null;
-  const str = String(val).replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, '');
-  const normalized = str.replace(/[\s\u00A0]+/g, '');
-  if (/^(https?:\/*)?$/i.test(normalized)) {
-    return null;
-  }
-  return str;
-}
-
-function cleanSlug(slug) {
-  if (slug === null || slug === undefined) return "default";
-  return String(slug).replace(/#/g, '').replace(/^[\s\u00A0]+|[\s\u00A0]+$/g, '').toLowerCase();
-}
-
-function transliterate(text) {
-  if (!text) return '';
-  const translitMap = {
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'zh',
-    'з': 'z', 'и': 'i', 'й': 'j', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
-    'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'kh', 'ц': 'ts',
-    'ч': 'ch', 'ш': 'sh', 'щ': 'shch', 'ы': 'y', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-    ' ': '-', '_': '-', '.': '', ',': '', ':': '', ';': '', '?': '', '!': ''
-  };
-  return text.toString().toLowerCase().split('').map(char => translitMap[char] || char).join('');
-}
-
-function getRowReader(sheet) {
-  if (!sheet) return null;
-  const values = sheet.getDataRange().getValues();
-  if (values.length === 0) return null;
-  
-  const headers = values[0].map(h => String(h).trim().toLowerCase());
-  
-  return {
-    rows: values.slice(1),
-    getVal: function(row, code) {
-      const idx = headers.indexOf(code.toLowerCase());
-      return idx !== -1 ? row[idx] : null;
-    }
-  };
-}
-
-function buildSimpleSku(article, name, length, width, thickness) {
-  const parts = [];
-  
-  if (article && String(article).trim() !== "") {
-    parts.push(generateSlug(String(article).trim()));
-  }
-  
-  if (name && String(name).trim() !== "") {
-    parts.push(generateSlug(String(name).trim()));
-  }
-  
-  if (length && parseFloat(length) > 0) parts.push(String(length).trim());
-  if (width && parseFloat(width) > 0) parts.push(String(width).trim());
-  if (thickness && parseFloat(thickness) > 0) parts.push(String(thickness).trim());
-  
-  return parts.join("-").toLowerCase();
-}
-
-function getValFromMatrix(arg, rowIndex, colIndex) {
-  if (Array.isArray(arg)) {
-    const row = arg[rowIndex] !== undefined ? arg[rowIndex] : arg[0];
-    if (Array.isArray(row)) {
-      return row[colIndex] !== undefined ? row[colIndex] : row[0];
-    }
-    return row;
-  }
-  return arg;
+  const dimsPart = (width && thickness) ? `_${width}_${thickness}` : '';
+  return `gdk_${brandShort || 'item'}_${cleanSlug}${dimsPart}`.replace(/_+/g, '_');
 }

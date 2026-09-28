@@ -1,502 +1,587 @@
-function exportCatalogJson() {
+/**
+ * Exporter.js — Экспорт полного пакета каталога в import_data.json для платформы VMS-NC
+ * Контракт полностью синхронизирован со схемой отраслевого пакета WPC и калькулятором.
+ */
+
+/**
+ * Главная функция экспорта полного файла import_data.json
+ */
+function exportFullCatalogJson() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  syncNewDataFromWorkingSheets();
 
-  const typesSheet = ss.getSheetByName('cfg_types');
-  const attrSheet = ss.getSheetByName('cfg_attributes');
-  const optSheet = ss.getSheetByName('cfg_options');
-  const catSheet = ss.getSheetByName('cfg_categories');
-  const complexSheet = ss.getSheetByName('cfg_complex_dicts');
-  const familiesSheet = ss.getSheetByName('cfg_families');
-  const pgSheet = ss.getSheetByName('cfg_price_groups');
-
-  const mappings = {};
-
-  const catReader = getRowReader(catSheet);
-  if (catReader) {
-    catReader.rows.forEach(row => {
-      const extCode = catReader.getVal(row, 'external_code');
-      const nameRu = catReader.getVal(row, 'name_ru');
-      if (extCode && nameRu) mappings['category:' + nameRu] = extCode;
-    });
+  // 1. Сборка продуктов со всех самодостаточных листов
+  const productsResult = collectAllProductsFromSheets(ss);
+  if (productsResult.products.length === 0) {
+    SpreadsheetApp.getUi().alert('Каталог пуст. Сначала выполните парсинг товаров на листах.');
+    return;
   }
 
-  const optReader = getRowReader(optSheet);
-  if (optReader) {
-    optReader.rows.forEach(row => {
-      const attrCode = optReader.getVal(row, 'attribute_code');
-      const valRu = optReader.getVal(row, 'value_ru');
-      const extCode = optReader.getVal(row, 'external_code');
-      if (attrCode && valRu && extCode) {
-        mappings[attrCode + ':' + valRu] = extCode;
+  // 2. Сборка связей калькулятора (binding_rules)
+  const bindingRules = collectAllBindingRules(ss);
+
+  // 3. Формирование динамических опций атрибутов (бренды и цвета)
+  const attributesSection = buildDynamicAttributesSection(productsResult.usedBrands, productsResult.usedColors);
+
+  // 4. Формирование итогового объекта import_data.json
+  const importData = {
+    languages: ["ru", "en"],
+    currencies: [
+      {
+        code: "KZT",
+        symbol: "₸",
+        symbol_native: { ru: "тенге", en: "₸" },
+        name: { ru: "Казахстанский тенге", en: "Kazakhstani Tenge" },
+        rate: 1,
+        is_default: true,
+        is_active: true
       }
-    });
-  }
-
-  const compReader = getRowReader(complexSheet);
-  if (compReader) {
-    compReader.rows.forEach(row => {
-      const dictCode = compReader.getVal(row, 'dict_code');
-      const nameRu = compReader.getVal(row, 'name_ru');
-      const extCode = compReader.getVal(row, 'external_code');
-      if (dictCode && nameRu && extCode) {
-        mappings[dictCode + ':' + nameRu] = extCode;
+    ],
+    price_types: [
+      {
+        slug: "retail",
+        currency_code: "KZT",
+        is_default: true,
+        name: { ru: "Цена продажи", en: "Retail" },
+        description: {
+          ru: "Розничная цена с сайта greendecks.kz",
+          en: "Retail price from greendecks.kz"
+        }
       }
-    });
-  }
-
-  const pgReader = getRowReader(pgSheet);
-  if (pgReader) {
-    pgReader.rows.forEach(row => {
-      const extCode = pgReader.getVal(row, 'external_code');
-      const slug = pgReader.getVal(row, 'slug');
-      const nameRu = pgReader.getVal(row, 'name_ru');
-      if (extCode) {
-        if (slug) mappings['price_group:' + String(slug).toLowerCase().trim()] = extCode;
-        if (nameRu) mappings['price_group:' + String(nameRu).toLowerCase().trim()] = extCode;
+    ],
+    families: [
+      {
+        external_code: "fam_decking_systems",
+        code: "decking_system",
+        name: { ru: "Террасный настил", en: "Terrace Decking Systems" }
       }
-    });
-  }
-
-  const attrConfig = {};
-  const attrReader2 = getRowReader(attrSheet);
-  if (attrReader2) {
-    attrReader2.rows.forEach(row => {
-      const code = attrReader2.getVal(row, 'code');
-      if (code) {
-        attrConfig[code] = {
-          isVariantOnly: String(attrReader2.getVal(row, 'is_variant_only')).toUpperCase() === 'TRUE',
-          type: String(attrReader2.getVal(row, 'type')).toLowerCase()
-        };
-      }
-    });
-  }
-
-  // Создаем карту соответствия кодов семейств их внешним кодам из cfg_families
-  const familyCodeToExtMap = {};
-  const familiesReader = getRowReader(familiesSheet);
-  if (familiesReader) {
-    familiesReader.rows.forEach(row => {
-      const code = familiesReader.getVal(row, 'code');
-      const extCode = familiesReader.getVal(row, 'external_code');
-      if (code && extCode) {
-        familyCodeToExtMap[String(code).trim().toLowerCase()] = String(extCode).trim();
-      }
-    });
-  }
-
-  const formatEavValue = (attrCode, rawVal) => {
-    if (rawVal === null || rawVal === '') return undefined;
-    const config = attrConfig[attrCode];
-    if (!config) return rawVal;
-
-    const lowerType = config.type.toLowerCase();
-
-    if (lowerType === 'boolean') {
-      return String(rawVal).toUpperCase() === 'TRUE' || rawVal === true;
-    }
-    if (lowerType === 'numeric') {
-      const num = parseFloat(rawVal);
-      return isNaN(num) ? rawVal : num;
-    }
-    if (lowerType === 'string') {
-      return String(rawVal);
-    }
-
-    return mappings[attrCode + ':' + rawVal] ?? rawVal;
+    ],
+    types: getStandardProductTypesDefinition(),
+    attributes: attributesSection,
+    products: productsResult.products,
+    pipelines: [getTerracePipelineDefinition()],
+    binding_rules: bindingRules
   };
 
-  const outputProducts = [];
-  const typeRows = typesSheet ? typesSheet.getDataRange().getValues() : [];
-  const typeHeaders = typeRows[0];
+  const jsonString = JSON.stringify(importData, null, 2);
 
-  for (let tIdx = 1; tIdx < typeRows.length; tIdx++) {
-    const typeCode = typeRows[tIdx][0];
-    const typeName = typeRows[tIdx][2];
-    if (!typeCode || !typeName) continue;
-
-    const sheet = ss.getSheetByName(typeName);
-    if (!sheet) continue;
-
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length < 3) continue;
-
-    const sysHeaders = rows[0].map(s => String(s).trim());
-    const productsMap = {};
-    let lastProductExtCode = null;
-
-    const attachedAttrsArray = [];
-    for (let col = 4; col < typeHeaders.length; col++) {
-      const attrCode = typeHeaders[col];
-      const isChecked = typeRows[tIdx][col] === true || String(typeRows[tIdx][col]).toUpperCase() === 'TRUE';
-      if (isChecked && attrCode) {
-        attachedAttrsArray.push(attrCode);
-      }
-    }
-
-    for (let r = 2; r < rows.length; r++) {
-      const row = rows[r];
-      const getVal = (code) => {
-        const colIndex = sysHeaders.indexOf(code);
-        return colIndex !== -1 ? row[colIndex] : null;
-      };
-
-      const rawExtCode = getVal('base_ext_code');
-      const rawName = getVal('base_name');
-      let sku = getVal('sku_code');
-      const skuCost = getVal('sku_cost');
-      const skuName = getVal('sku_name');
-
-      const hasAnyData = row.some(cell => cell !== null && cell !== "");
-      if (!hasAnyData) continue;
-
-      let currentProductExtCode = lastProductExtCode;
-
-      if (rawExtCode || rawName) {
-        let prodSlug = getVal('base_slug') || generateSlug(rawName);
-        currentProductExtCode = rawExtCode ? String(rawExtCode).trim() : ('prod_' + prodSlug);
-        lastProductExtCode = currentProductExtCode;
-
-        if (!productsMap[currentProductExtCode]) {
-          const catName = getVal('base_category');
-          productsMap[currentProductExtCode] = {
-            "external_code": currentProductExtCode,
-            "product_type_external_code": "type_" + typeCode,
-            "category_external_code": mappings['category:' + catName] || null,
-            "catalog_type": "product",
-            "unit_code": "pcs",
-            "slug": prodSlug,
-            "name": { "ru": rawName, "en": transliterate(rawName) },
-            "preview_picture": cleanUrl(getVal('base_image')),
-            "detail_picture": null,
-            "eav": {},
-            "variants": []
-          };
-
-          for (let c = 0; c < sysHeaders.length; c++) {
-            const attrCode = sysHeaders[c];
-            if (!attrCode || BASE_FIELDS.includes(attrCode)) continue;
-            if (attrConfig[attrCode] && attrConfig[attrCode].isVariantOnly) continue;
-            if (attrCode === 'price_group') continue;
-
-            const cellVal = row[c];
-            const formatted = formatEavValue(attrCode, cellVal);
-            if (formatted !== undefined) {
-              productsMap[currentProductExtCode].eav[attrCode] = formatted;
-            }
-          }
-        }
-      }
-
-      if (currentProductExtCode && productsMap[currentProductExtCode]) {
-        const prodSlug = productsMap[currentProductExtCode].slug;
-        const variantEav = {};
-        let hasVariantAttr = false;
-        let priceGroupExtCode = null;
-
-        const rawPriceGroup = getVal('price_group');
-        if (rawPriceGroup) {
-          const cleanKey = String(rawPriceGroup).toLowerCase().trim();
-          priceGroupExtCode = mappings['price_group:' + cleanKey] || ('pg_' + generateSlug(rawPriceGroup));
-        }
-
-        for (let c = 0; c < sysHeaders.length; c++) {
-          const attrCode = sysHeaders[c];
-          if (!attrCode || BASE_FIELDS.includes(attrCode)) continue;
-          if (!attrConfig[attrCode] || !attrConfig[attrCode].isVariantOnly) continue;
-
-          const cellVal = row[c];
-          const formatted = formatEavValue(attrCode, cellVal);
-          if (formatted !== undefined) {
-            variantEav[attrCode] = formatted;
-            hasVariantAttr = true;
-          }
-        }
-
-        const isDefaultStr = String(getVal('sku_default')).toUpperCase();
-        const hasSkuData = sku || skuCost || skuName || isDefaultStr === 'TRUE' || isDefaultStr === 'FALSE' || hasVariantAttr || priceGroupExtCode;
-
-        if (hasSkuData) {
-          if (!sku) {
-            let variantParts = [];
-            if (skuName) {
-              variantParts.push(generateSlug(skuName));
-            } else {
-              for (let key in variantEav) {
-                const val = variantEav[key];
-                variantParts.push(generateSlug(val));
-              }
-            }
-            if (variantParts.length > 0) {
-              sku = prodSlug + '-' + variantParts.join('-');
-            } else {
-              sku = prodSlug + '-var-' + r;
-            }
-          }
-
-          const costPrice = parseFloat(skuCost) || 0;
-          const isManualPricing = String(getVal('sku_manual')).toUpperCase() === 'TRUE';
-          const stock = parseFloat(getVal('sku_stock')) || 10.0;
-
-          const variantObj = {
-            "external_code": "sku_" + sku,
-            "sku": sku,
-            "name": skuName ? { "ru": skuName, "en": transliterate(skuName) } : null,
-            "price_group_external_code": priceGroupExtCode,
-            "stock": stock,
-            "is_default": isDefaultStr === 'TRUE',
-            "preview_picture": cleanUrl(getVal('sku_image')),
-            "detail_picture": null,
-            "eav": variantEav,
-            "is_manual_pricing": isManualPricing,
-            "cost_price": costPrice,
-            "currency": getVal('sku_currency') || 'RUB'
-          };
-
-          if (isManualPricing) {
-            variantObj.price = costPrice * 1.3;
-          }
-
-          productsMap[currentProductExtCode].variants.push(variantObj);
-        }
-      }
-    }
-
-    Object.keys(productsMap).forEach(key => outputProducts.push(productsMap[key]));
-  }
-
-  const jsonExport = {
-    "languages": [],
-    "families": [],
-    "types": [],
-    "categories": [],
-    "price_groups": [],
-    "complex_dictionaries": [],
-    "attributes": [],
-    "products": outputProducts
-  };
-
-  if (pgReader) {
-    pgReader.rows.forEach(row => {
-      const extCode = pgReader.getVal(row, 'external_code');
-      if (!extCode) return;
-
-      const famCode = pgReader.getVal(row, 'family_code');
-
-      jsonExport.price_groups.push({
-        "external_code": extCode,
-        "product_family_external_code": famCode ? (familyCodeToExtMap[String(famCode).trim().toLowerCase()] || ("fam_" + String(famCode).trim().replace('-', '_'))) : null,
-        "slug": String(pgReader.getVal(row, 'slug')),
-        "name": {
-          "ru": pgReader.getVal(row, 'name_ru'),
-          "en": pgReader.getVal(row, 'name_en') || undefined
-        },
-        "description": {
-          "ru": pgReader.getVal(row, 'description_ru') || undefined,
-          "en": pgReader.getVal(row, 'description_en') || undefined
-        },
-        "meta": {
-          "purchase_cost": parseFloat(pgReader.getVal(row, 'purchase_cost')) || 0,
-          "purchase_currency": pgReader.getVal(row, 'purchase_currency') || 'USD',
-          "markup_retail": parseFloat(pgReader.getVal(row, 'markup_retail')) || 0
-        }
-      });
-    });
-  }
-
-  if (familiesReader) {
-    familiesReader.rows.forEach(row => {
-      const code = familiesReader.getVal(row, 'code');
-      if (!code) return;
-
-      jsonExport.families.push({
-        "external_code": familiesReader.getVal(row, 'external_code') || ("fam_" + code),
-        "code": code,
-        "name": {
-          "ru": familiesReader.getVal(row, 'name_ru'),
-          "en": familiesReader.getVal(row, 'name_en')
-        },
-        "meta_schema": familiesReader.getVal(row, 'meta_schema') ? JSON.parse(familiesReader.getVal(row, 'meta_schema')) : undefined
-      });
-    });
-  }
-
-  if (typesSheet) {
-    const tRows = typesSheet.getDataRange().getValues();
-    for (let i = 1; i < tRows.length; i++) {
-      if (!tRows[i][0]) continue;
-
-      const attached = [];
-      for (let col = 4; col < typeHeaders.length; col++) {
-        const attrCode = typeHeaders[col];
-        const isChecked = tRows[i][col] === true || String(tRows[i][col]).toUpperCase() === 'TRUE';
-        if (isChecked && attrCode) {
-          attached.push({
-            "code": attrCode,
-            "is_variant_only": attrConfig[attrCode] ? attrConfig[attrCode].isVariantOnly : false
-          });
-        }
-      }
-
-      let meta = {};
-      let pricingMode = "manual";
-      let pricingAttrCode = null;
-      let pricingField = null;
-
-      if (tRows[i][0] === 'acrylic_stone') {
-        meta = { "step": 0.5, "maxStack": 1, "axisX": true, "minPart": 12, "is_separate": false, "corner_add_length": 920, "corner_add_width": 760,  "allow_rounding": true};
-        pricingMode = "complex_dictionary";
-        pricingField = "purchase_cost";
-      } else if (tRows[i][0] === 'quartz_stone') {
-        meta = { "step": 1, "maxStack": 1, "axisX": false, "minPart": 20, "is_separate": true, "corner_add_length": 750, "corner_add_width": 700,  "allow_rounding": false};
-        pricingMode = "complex_dictionary";
-        pricingField = "purchase_cost";
-      }
-
-      jsonExport.types.push({
-        "external_code": "type_" + tRows[i][0],
-        "family_external_code": familyCodeToExtMap[String(tRows[i][1]).trim().toLowerCase()] || ("fam_" + String(tRows[i][1]).trim().replace('-', '_')),
-        "code": tRows[i][0],
-        "name": { "ru": tRows[i][2], "en": tRows[i][3] },
-        "meta": meta,
-        "attached_attributes": attached,
-        "pricing_mode": pricingMode,
-        "pricing_attr_code": pricingAttrCode,
-        "pricing_field": pricingField
-      });
-    }
-  }
-
-  if (catReader) {
-    catReader.rows.forEach(row => {
-      const extCode = catReader.getVal(row, 'external_code');
-      if (!extCode) return;
-
-      jsonExport.categories.push({
-        "external_code": extCode,
-        "parent_external_code": catReader.getVal(row, 'parent_external_code') || null,
-        "slug": catReader.getVal(row, 'slug'),
-        "name": {
-          "ru": catReader.getVal(row, 'name_ru'),
-          "en": catReader.getVal(row, 'name_en')
-        }
-      });
-    });
-  }
-
-  if (compReader) {
-    const complexDictsMap = {};
-    compReader.rows.forEach(row => {
-      const dictCode = compReader.getVal(row, 'dict_code');
-      if (!dictCode || dictCode === 'price_group') return;
-
-      if (!complexDictsMap[dictCode]) {
-        let dictName = { "ru": dictCode, "en": dictCode };
-        let metaSchema = [];
-        if (dictCode === 'cutting_groups') {
-          dictName = { "ru": "Группы раскроя", "en": "Cutting groups" };
-          metaSchema = [
-            { "key": "rotate", "type": "boolean", "label": { "ru": "Повтор рисунка", "en": "Pattern Repeat" } },
-            { "key": "cut", "type": "boolean", "label": { "ru": "Раздельный раскрой", "en": "Separate Cutting" } }
-          ];
-        } else if (dictCode === 'thicknesses') {
-          dictName = { "ru": "Коэффициенты толщин", "en": "Thickness Coefficients" };
-          metaSchema = [
-            { "key": "material_code", "type": "text", "label": { "ru": "Системный код материала", "en": "Material Code" } },
-            { "key": "thickness", "type": "number", "label": { "ru": "Толщина (мм)", "en": "Thickness (mm)" } },
-            { "key": "coefficient", "type": "number", "label": { "ru": "Коэффициент наценки", "en": "Coefficient" } }
-          ];
-        }
-
-        complexDictsMap[dictCode] = {
-          "external_code": "dict_" + dictCode,
-          "code": dictCode,
-          "name": dictName,
-          "meta_schema": metaSchema,
-          "records": []
-        };
-      }
-
-      const recMeta = {};
-
-      const k1 = compReader.getVal(row, 'k1');
-      const v1 = compReader.getVal(row, 'v1');
-      const k2 = compReader.getVal(row, 'k2');
-      const v2 = compReader.getVal(row, 'v2');
-      const k3 = compReader.getVal(row, 'k3');
-      const v3 = compReader.getVal(row, 'v3');
-
-      const parseValue = (val) => {
-        if (val === 'TRUE' || val === true) return true;
-        if (val === 'FALSE' || val === false) return false;
-        if (val === '') return undefined;
-        const num = parseFloat(val);
-        return isNaN(num) ? val : num;
-      };
-
-      if (k1) recMeta[k1] = parseValue(v1);
-      if (k2) recMeta[k2] = parseValue(v2);
-      if (k3) recMeta[k3] = parseValue(v3);
-
-      complexDictsMap[dictCode].records.push({
-        "external_code": compReader.getVal(row, 'external_code'),
-        "slug": String(compReader.getVal(row, 'slug')),
-        "name": {
-          "ru": compReader.getVal(row, 'name_ru'),
-          "en": compReader.getVal(row, 'name_en') || undefined
-        },
-        "meta": recMeta
-      });
-    });
-
-    jsonExport.complex_dictionaries = Object.values(complexDictsMap);
-  }
-
-  const attributesMap = {};
-  if (attrReader2) {
-    attrReader2.rows.forEach(row => {
-      const code = attrReader2.getVal(row, 'code');
-      if (!code || code === 'price_group') return;
-      attributesMap[code] = {
-        "external_code": "attr_" + code,
-        "code": code,
-        "type": attrReader2.getVal(row, 'type'),
-        "name": {
-          "ru": attrReader2.getVal(row, 'name_ru'),
-          "en": attrReader2.getVal(row, 'name_en')
-        },
-        "is_multiple": String(attrReader2.getVal(row, 'is_multiple')).toUpperCase() === 'TRUE',
-        "options": []
-      };
-    });
-  }
-
-  if (optReader) {
-    optReader.rows.forEach(row => {
-      const code = optReader.getVal(row, 'attribute_code');
-      if (!code || !attributesMap[code] || code === 'price_group') return;
-
-      attributesMap[code].options.push({
-        "external_code": optReader.getVal(row, 'external_code'),
-        "slug": optReader.getVal(row, 'slug'),
-        "value": {
-          "ru": optReader.getVal(row, 'value_ru'),
-          "en": optReader.getVal(row, 'value_en')
-        },
-        "meta": {
-          "hex": optReader.getVal(row, 'hex') || null,
-          "image": cleanUrl(optReader.getVal(row, 'image'))
-        }
-      });
-    });
-  }
-  jsonExport.attributes = Object.values(attributesMap);
-
-  const jsonString = JSON.stringify(jsonExport, null, 2);
   const htmlOutput = HtmlService.createHtmlOutput(
-    `<p>Скопируйте JSON и сохраните его в файл <b>import_ready_filtered.json</b>:</p>
-     <textarea style="width: 100%; height: 350px;" readonly onClick="this.select();">${jsonString}</textarea>`
-  ).setWidth(600).setHeight(450);
+    `<div style="font-family:sans-serif;padding:5px;">` +
+    `<p style="margin:0 0 10px 0;font-size:13px;">` +
+    `Сформирован полный файл <b>import_data.json</b>.<br>` +
+    `Товаров (моделей): <b>${productsResult.products.length}</b> | ` +
+    `Связей калькулятора: <b>${bindingRules.length}</b>` +
+    `</p>` +
+    `<textarea style="width:100%;height:380px;font-family:monospace;font-size:11px;padding:8px;" readonly onClick="this.select();">${jsonString}</textarea>` +
+    `</div>`
+  ).setWidth(780).setHeight(500);
 
-  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Экспорт завершен');
+  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Экспорт import_data.json (VMS-NC)');
+}
+
+/**
+ * Сбор товаров со всех самодостаточных листов каталога
+ */
+function collectAllProductsFromSheets(ss) {
+  const sheetsToScan = [
+    { sheetName: '1. Доски', type: 'terraceBoard' },
+    { sheetName: '2. Ступени', type: 'stepBoard' },
+    { sheetName: '3. Уголки и декор', type: 'decorProducts' },
+    { sheetName: '4. Универсальная доска (зашивка)', altName: '4. Доска обрамления', type: 'board' },
+    { sheetName: '5. Лаги', type: 'joist' },
+    { sheetName: '6. Кляймеры и крепеж', type: 'brackets' }
+  ];
+
+  const productsMap = new Map();
+  const usedBrands = new Set();
+  const usedColors = new Map();
+
+  sheetsToScan.forEach(scanMeta => {
+    let sheet = ss.getSheetByName(scanMeta.sheetName);
+    if (!sheet && scanMeta.altName) {
+      sheet = ss.getSheetByName(scanMeta.altName);
+    }
+    if (!sheet || sheet.getLastRow() < 2) return;
+
+    const data = sheet.getDataRange().getValues();
+    const typeKey = scanMeta.type;
+    let defaultProductTypeExt = GDK_CONFIG.PRODUCT_TYPES[typeKey] || 'type_terraceBoard';
+    const calcCategory = GDK_CONFIG.CALC_CATEGORIES[typeKey] || null;
+
+    for (let r = 1; r < data.length; r++) {
+      const productCode = String(data[r][1] || '').trim();
+      const sku = String(data[r][2] || '').trim();
+      const name = String(data[r][3] || '').trim();
+      const brand = String(data[r][4] || '').trim() || 'opt_brand_greendecks';
+      const material = String(data[r][5] || '').trim() || 'ДПК (Древесно-полимерный композит)';
+      const colorName = String(data[r][6] || '').trim();
+      const colorSlug = String(data[r][7] || '').trim().toLowerCase();
+      const colorHex = String(data[r][8] || '').trim();
+      const lengthMm = parseFloat(data[r][9]) || null;
+      const widthMm = parseFloat(data[r][10]) || null;
+      const thicknessMm = parseFloat(data[r][11]) || null;
+      const priceRetail = parseFloat(data[r][12]) || 0;
+      const costPrice = parseFloat(data[r][13]) || (priceRetail > 0 ? Math.round(priceRetail * 0.7) : null);
+      const imageUrl = String(data[r][14] || '').trim() || null;
+      const rawSourceUrl = String(data[r][15] || '').trim() || null;
+      const sourceUrl = cleanProductUrl(rawSourceUrl);
+
+      if (!productCode || !sku) continue;
+
+      // Определение типа: саморезы на Листе 6 относим к type_fasteners
+      let actualProductTypeExt = defaultProductTypeExt;
+      if (typeKey === 'brackets') {
+        const lowerName = name.toLowerCase();
+        if (lowerName.includes('саморез') || lowerName.includes('шуруп') || sku.toLowerCase().includes('screw')) {
+          actualProductTypeExt = 'type_fasteners';
+        }
+      }
+
+      usedBrands.add(brand);
+      if (colorSlug && !usedColors.has(colorSlug)) {
+        usedColors.set(colorSlug, {
+          name: colorName || colorSlug,
+          hex: colorHex || '#808080',
+          option_code: 'opt_' + colorSlug.replace(/[^a-z0-9_]/g, '_')
+        });
+      }
+
+      // Базовый продукт (Product)
+      if (!productsMap.has(productCode)) {
+        const cleanBaseName = name.replace(/\s*\([^)]*\)\s*/g, '').trim();
+        const baseSlug = productCode.replace(/_/g, '-').replace(/^gdk-/, '');
+
+        const eav = {
+          material: material,
+          brand: brand
+        };
+
+        if (calcCategory) eav.product_calc_category = calcCategory;
+        if (lengthMm) eav.length_mm = lengthMm;
+        if (widthMm) eav.width_mm = widthMm;
+        if (thicknessMm) eav.thickness_mm = thicknessMm;
+
+        if (colorSlug && usedColors.has(colorSlug)) {
+          eav.color = usedColors.get(colorSlug).option_code;
+        }
+
+        productsMap.set(productCode, {
+          external_code: productCode,
+          product_type_external_code: actualProductTypeExt,
+          category_external_code: null,
+          catalog_type: "product",
+          unit_code: "pcs",
+          slug: baseSlug,
+          name: { ru: cleanBaseName, en: cleanBaseName },
+          code: productCode,
+          is_active: true,
+          eav: eav,
+          variants: [],
+          preview_picture: imageUrl,
+          detail_picture: imageUrl,
+          source_url: sourceUrl
+        });
+      }
+
+      const currentProduct = productsMap.get(productCode);
+      const isDefault = currentProduct.variants.length === 0;
+
+      // Модификация (ProductVariant / SKU)
+      const variantPayload = {
+        external_code: sku,
+        sku: sku,
+        name: { ru: name, en: name },
+        price_group_external_code: null,
+        stock: null,
+        is_default: isDefault,
+        is_manual_pricing: false,
+        cost_price: costPrice,
+        currency: "KZT",
+        price: priceRetail,
+        eav: [],
+        is_active: true
+      };
+
+      currentProduct.variants.push(variantPayload);
+    }
+  });
+
+  return {
+    products: Array.from(productsMap.values()),
+    usedBrands: Array.from(usedBrands),
+    usedColors: usedColors
+  };
+}
+
+/**
+ * Сборка правил связей (binding_rules) с листа связей
+ */
+function collectAllBindingRules(ss) {
+  const sheet = getPipelineSheet(ss);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+
+  const data = sheet.getDataRange().getValues();
+  const rules = [];
+  const seenRuleCodes = new Set();
+
+  for (let i = 1; i < data.length; i++) {
+    const parentSku = String(data[i][0]).trim();
+    if (!parentSku) continue;
+
+    const parentName = String(data[i][1] || parentSku).substring(0, 45);
+    const joist = String(data[i][2] || '').trim();
+    const startClip = String(data[i][3] || '').trim();
+    const baseClip = String(data[i][4] || '').trim();
+    const corner = String(data[i][5] || '').trim();
+    const universalBoardsRaw = String(data[i][6] || '').trim();
+    const stepBoardsRaw = String(data[i][7] || '').trim();
+    const fixing = String(data[i][8] || '').trim();
+    const noseSize = data[i][9] || 20;
+    const holes = data[i][10] || 1;
+
+    // 1. Монтажная лага (joist)
+    if (joist) {
+      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'joist', parentSku, joist, 50, `Связь joist: ${parentName}`));
+    }
+
+    // 2. Стартовый кляймер (startClip) + параметр holes
+    if (startClip) {
+      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'startClip', parentSku, startClip, 10, `Связь startClip: ${parentName}`));
+      addHolesParam(rules, seenRuleCodes, startClip, holes);
+    }
+
+    // 3. Рядовой кляймер (baseClip) + параметр holes
+    if (baseClip) {
+      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'baseClip', parentSku, baseClip, 20, `Связь baseClip: ${parentName}`));
+      addHolesParam(rules, seenRuleCodes, baseClip, holes);
+    }
+
+    // 4. Декоративный уголок (corner) — окантовка периметра
+    if (corner) {
+      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'corner', parentSku, corner, 30, `Связь corner: ${parentName}`, false));
+    }
+
+    // 5. Универсальные доски (universalBoards) — вертикальная зашивка цоколя
+    if (universalBoardsRaw) {
+      const items = universalBoardsRaw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+      items.forEach(childSku => {
+        addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'universalBoards', parentSku, childSku, 40, `Связь universalBoards: ${parentName}`, false));
+        if (fixing) {
+          addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'fixing', childSku, fixing, 10, `Связь Крепление доски (саморез): ${childSku}`, true));
+        }
+      });
+    }
+
+    // 6. Ступени (stepBoards) — окантовка периметра с носиком + параметр noseSize
+    if (stepBoardsRaw) {
+      const items = stepBoardsRaw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
+      items.forEach(childSku => {
+        addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'stepBoards', parentSku, childSku, 35, `Связь stepBoards: ${parentName}`, false));
+        addNoseSizeParam(rules, seenRuleCodes, childSku, noseSize);
+      });
+    }
+  }
+
+  return rules;
+}
+
+/**
+ * Определение стандартных типов товаров VMS-NC
+ */
+function getStandardProductTypesDefinition() {
+  return [
+    {
+      external_code: "type_terraceBoard",
+      family_external_code: "fam_decking_systems",
+      code: "terraceBoard",
+      name: { ru: "Террасная доска", en: "Terrace Board" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "thickness_mm", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
+    },
+    {
+      external_code: "type_board",
+      family_external_code: "fam_decking_systems",
+      code: "board",
+      name: { ru: "Доска универсальная (зашивка)", en: "Universal Board" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "thickness_mm", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
+    },
+    {
+      external_code: "type_stepBoard",
+      family_external_code: "fam_decking_systems",
+      code: "stepBoard",
+      name: { ru: "Ступень", en: "Step Board" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "thickness_mm", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
+    },
+    {
+      external_code: "type_brackets",
+      family_external_code: "fam_decking_systems",
+      code: "brackets",
+      name: { ru: "Кляймеры и кронштейны", en: "Clips and Brackets" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false }
+      ]
+    },
+    {
+      external_code: "type_fasteners",
+      family_external_code: "fam_decking_systems",
+      code: "fasteners",
+      name: { ru: "Крепеж и саморезы", en: "Fasteners and Screws" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false }
+      ]
+    },
+    {
+      external_code: "type_decorProducts",
+      family_external_code: "fam_decking_systems",
+      code: "decorProducts",
+      name: { ru: "Декоративные изделия (уголки)", en: "Decorative Corners" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false }
+      ]
+    },
+    {
+      external_code: "type_joist",
+      family_external_code: "fam_decking_systems",
+      code: "joist",
+      name: { ru: "Лага монтажная (подконструкция)", en: "Substructure Joist" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "thickness_mm", is_variant_only: false }
+      ]
+    }
+  ];
+}
+
+/**
+ * Динамическое формирование секции attributes с опциями брендов и цветов
+ */
+function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
+  const brandOptions = [
+    { external_code: "opt_brand_legro", slug: "legro", value: { ru: "Legro", en: "Legro" }, param: "legro" },
+    { external_code: "opt_brand_easydecking", slug: "easydecking", value: { ru: "EasyDecking", en: "EasyDecking" }, param: "easydecking" },
+    { external_code: "opt_brand_greendecks", slug: "greendecks", value: { ru: "Greendecks", en: "Greendecks" }, param: "greendecks" },
+    { external_code: "opt_brand_timber-essential", slug: "timber-essential", value: { ru: "Timber Essential", en: "Timber Essential" }, param: "timber-essential" },
+    { external_code: "opt_brand_welltouch", slug: "welltouch", value: { ru: "Welltouch", en: "Welltouch" }, param: "welltouch" },
+    { external_code: "opt_brand_pudeck", slug: "pudeck", value: { ru: "PUDECK", en: "PUDECK" }, param: "pudeck" },
+    { external_code: "opt_brand_greenwood", slug: "greenwood", value: { ru: "GreenWOOD", en: "GreenWOOD" }, param: "greenwood" },
+    { external_code: "opt_brand_aludeck", slug: "aludeck", value: { ru: "AluDeck", en: "AluDeck" }, param: "aludeck" },
+    { external_code: "opt_brand_prestige", slug: "prestige", value: { ru: "Prestige", en: "Prestige" }, param: "prestige" },
+    { external_code: "opt_brand_titan", slug: "titan", value: { ru: "Titan", en: "Titan" }, param: "titan" },
+    { external_code: "opt_brand_polyrootd", slug: "polyrootd", value: { ru: "PolyrootD", en: "PolyrootD" }, param: "polyrootd" },
+    { external_code: "opt_brand_master", slug: "master", value: { ru: "Master", en: "Master" }, param: "master" },
+    { external_code: "opt_brand_robust", slug: "robust", value: { ru: "Robust", en: "Robust" }, param: "robust" },
+    { external_code: "opt_brand_nauticprime", slug: "nauticprime", value: { ru: "NauticPrime", en: "NauticPrime" }, param: "nauticprime" },
+    { external_code: "opt_brand_select", slug: "select", value: { ru: "Select", en: "Select" }, param: "select" },
+    { external_code: "opt_brand_crown", slug: "crown", value: { ru: "Crown", en: "Crown" }, param: "crown" },
+    { external_code: "opt_brand_hilst", slug: "hilst", value: { ru: "HILST", en: "HILST" }, param: "hilst" },
+    { external_code: "opt_brand_holzhof", slug: "holzhof", value: { ru: "Holzhof", en: "Holzhof" }, param: "holzhof" },
+    { external_code: "opt_brand_3d-wood", slug: "3d-wood", value: { ru: "3D WOOD", en: "3D WOOD" }, param: "3d-wood" },
+    { external_code: "opt_brand_brushing-mix", slug: "brushing-mix", value: { ru: "Brushing Mix", en: "Brushing Mix" }, param: "brushing-mix" }
+  ];
+
+  usedBrands.forEach(bCode => {
+    if (!brandOptions.some(opt => opt.external_code === bCode)) {
+      const cleanSlug = bCode.replace(/^opt_brand_/, '');
+      brandOptions.push({
+        external_code: bCode,
+        slug: cleanSlug,
+        value: { ru: cleanSlug.toUpperCase(), en: cleanSlug.toUpperCase() },
+        param: cleanSlug
+      });
+    }
+  });
+
+  const colorOptions = [
+    { external_code: "opt_venge", slug: "wenge", value: { ru: "Венге", en: "Wenge" }, param: "wenge", meta: { hex: "#3B2219" } },
+    { external_code: "opt_dub", slug: "oak", value: { ru: "Дуб", en: "Oak" }, param: "oak", meta: { hex: "#C4A77D" } },
+    { external_code: "opt_seryi", slug: "grey", value: { ru: "Серый", en: "Grey" }, param: "grey", meta: { hex: "#808080" } },
+    { external_code: "opt_grafit", slug: "graphite", value: { ru: "Графит", en: "Graphite" }, param: "graphite", meta: { hex: "#4A5568" } },
+    { external_code: "opt_antracit", slug: "black_wood", value: { ru: "Черное дерево", en: "Black Wood" }, param: "black_wood", meta: { hex: "#1A1A1A" } },
+    { external_code: "opt_koricnevyi", slug: "brown", value: { ru: "Коричневый", en: "Brown" }, param: "brown", meta: { hex: "#654321" } },
+    { external_code: "opt_temno-koricnevyi", slug: "dark_brown", value: { ru: "Темно-коричневый", en: "Dark Brown" }, param: "dark_brown", meta: { hex: "#3B2219" } },
+    { external_code: "opt_gdk_natural", slug: "natural", value: { ru: "Натураль", en: "Natural" }, param: "natural", meta: { hex: "#C4A77D" } },
+    { external_code: "opt_gdk_korichnevyy_temno", slug: "korichnevyy_temno", value: { ru: "Коричневый/Тёмно-коричневый", en: "Brown / Dark Brown" }, param: "korichnevyy_temno", meta: { hex: "#654321" } },
+    { external_code: "opt_gdk_serebristyy", slug: "silver", value: { ru: "Серебристый", en: "Silver" }, param: "silver", meta: { hex: "#C0C0C0" } },
+    { external_code: "opt_gdk_dvukhtsvetnaya", slug: "bicolor", value: { ru: "Двухцветная", en: "Bi-color" }, param: "bicolor", meta: { hex: "#654321" } },
+    { external_code: "opt_belyi", slug: "white", value: { ru: "Белый", en: "White" }, param: "white", meta: { hex: "#F0EBE0" } }
+  ];
+
+  usedColorsMap.forEach((info, slug) => {
+    if (!colorOptions.some(opt => opt.slug === slug || opt.external_code === info.option_code)) {
+      colorOptions.push({
+        external_code: info.option_code,
+        slug: slug,
+        value: { ru: info.name, en: info.name },
+        param: slug,
+        meta: { hex: info.hex }
+      });
+    }
+  });
+
+  return [
+    {
+      external_code: "3c8dc722-9471-11f0-0a80-0155001d3915",
+      code: "brand",
+      type: "dictionary",
+      name: { ru: "Бренд", en: "Brand" },
+      is_multiple: false,
+      options: brandOptions
+    },
+    {
+      external_code: "69b39e1b-9460-11f0-0a80-1430001abae1",
+      code: "width_mm",
+      type: "numeric",
+      name: { ru: "Ширина, мм", en: "Width, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "69b39bff-9460-11f0-0a80-1430001abae0",
+      code: "length_mm",
+      type: "numeric",
+      name: { ru: "Длина, мм", en: "Length, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "69b3a01b-9460-11f0-0a80-1430001abae4",
+      code: "thickness_mm",
+      type: "numeric",
+      name: { ru: "Толщина, мм", en: "Thickness, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "0ae4e30b-a75c-11f0-0a80-15e400210259",
+      code: "product_calc_category",
+      type: "dictionary",
+      name: { ru: "Категория товара (Калькулятор)", en: "Product Category (Calculator)" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_color",
+      code: "color",
+      type: "dictionary",
+      name: { ru: "Цвет", en: "Color" },
+      is_multiple: false,
+      options: colorOptions
+    }
+  ];
+}
+
+/**
+ * Определение пайплайна pl_terrace в строгом соответствии с отраслевой схемой калькулятора
+ */
+function getTerracePipelineDefinition() {
+  return {
+    external_code: "pl_terrace",
+    code: "pl_terrace",
+    slug: "terrace",
+    name: {
+      ru: "Конфигуратор террасного настила (ДПК) — Greendecks",
+      en: "Terrace Decking Configurator — Greendecks"
+    },
+    is_active: true,
+    sort_order: 10,
+    ui_state: [],
+    schema: {
+      terraceBoard: {
+        joist: {
+          label_key: { ru: "Монтажная лага", en: "Substructure Joist" },
+          target_type: "product_type",
+          target_code: "joist",
+          is_required: true,
+          is_multiple: false
+        },
+        startClip: {
+          label_key: { ru: "Стартовый кляймер", en: "Start Clip" },
+          target_type: "product_type",
+          target_code: "brackets",
+          is_required: true,
+          is_multiple: false
+        },
+        baseClip: {
+          label_key: { ru: "Рядовой кляймер", en: "Base Clip" },
+          target_type: "product_type",
+          target_code: "brackets",
+          is_required: true,
+          is_multiple: false
+        },
+        corner: {
+          label_key: { ru: "Уголок декоративный (периметр)", en: "Decorative Corner" },
+          target_type: "product_type",
+          target_code: "decorProducts",
+          is_required: false,
+          is_multiple: false
+        },
+        universalBoards: {
+          label_key: { ru: "Универсальная доска (зашивка)", en: "Universal Board" },
+          target_type: "product_type",
+          target_code: "board",
+          is_required: false,
+          is_multiple: false
+        },
+        stepBoards: {
+          label_key: { ru: "Ступени (периметр)", en: "Step Boards" },
+          target_type: "product_type",
+          target_code: "stepBoard",
+          is_required: false,
+          is_multiple: true
+        }
+      },
+      board: {
+        fixing: {
+          label_key: { ru: "Крепление доски (саморез)", en: "Board Fastener" },
+          target_type: "product_type",
+          target_code: "fasteners",
+          is_required: true,
+          is_multiple: false
+        }
+      },
+      stepBoard: {
+        noseSize: {
+          label_key: { ru: "Размер носика", en: "Nose Size" },
+          target_type: "scalar",
+          target_code: null,
+          is_required: true,
+          is_multiple: false
+        }
+      },
+      brackets: {
+        holes: {
+          label_key: { ru: "Количество отверстий", en: "Holes" },
+          target_type: "scalar",
+          target_code: null,
+          is_required: true,
+          is_multiple: false
+        }
+      }
+    }
+  };
 }
