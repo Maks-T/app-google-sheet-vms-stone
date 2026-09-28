@@ -23,6 +23,9 @@ function getPipelineSheet(ss) {
 function setupPipelineSheet(sheet) {
   sheet = sheet || getPipelineSheet();
   sheet.clear();
+  if (sheet.getMaxRows() > 0 && sheet.getMaxColumns() > 0) {
+    sheet.getRange(1, 1, sheet.getMaxRows(), sheet.getMaxColumns()).clearDataValidations();
+  }
 
   const headers = [
     'board_sku',
@@ -120,14 +123,14 @@ function autoGenerateRelationsFromSheets() {
         defaultStartClip = sku;
       } else if (!defaultBaseClip && (name.includes('рядов') || sku.includes('H3D7') || name.includes('клипса') || name.includes('кляймер'))) {
         defaultBaseClip = sku;
-      } else if (!defaultScrew && (name.includes('саморез') || name.includes('шуруп') || sku.includes('screw'))) {
+      } else if (!defaultScrew && (name.includes('саморез') || name.includes('шуруп') || sku.includes('screw') || sku.includes('124') || sku.includes('125'))) {
         defaultScrew = sku;
       }
     }
   }
   if (!defaultStartClip) defaultStartClip = 'gdk_acc_HS7';
   if (!defaultBaseClip) defaultBaseClip = 'gdk_acc_H3D7';
-  if (!defaultScrew) defaultScrew = 'screw_35x20';
+  if (!defaultScrew) defaultScrew = '';
 
   const pipelineRows = [];
 
@@ -201,14 +204,20 @@ function syncDropdowns() {
   const joists = extractSkusFromSheet(ss.getSheetByName('5. Лаги'));
   const clipsAndFasteners = extractSkusFromSheet(ss.getSheetByName('6. Кляймеры и крепеж'));
 
-  setColumnValidation(pipelineSheet, 'A2:A1000', boards);
-  setColumnValidation(pipelineSheet, 'C2:C1000', joists);
-  setColumnValidation(pipelineSheet, 'D2:D1000', clipsAndFasteners);
-  setColumnValidation(pipelineSheet, 'E2:E1000', clipsAndFasteners);
-  setColumnValidation(pipelineSheet, 'F2:F1000', corners);
-  setColumnValidation(pipelineSheet, 'G2:G1000', uniboards);
+  const fixingScrews = [...clipsAndFasteners];
+  if (!fixingScrews.includes('00124')) fixingScrews.push('00124');
+  if (!fixingScrews.includes('00125')) fixingScrews.push('00125');
+  if (!fixingScrews.includes('124')) fixingScrews.push('124');
+  if (!fixingScrews.includes('125')) fixingScrews.push('125');
+
+  setColumnValidation(pipelineSheet, 'A2:A1000', boards, true);
+  setColumnValidation(pipelineSheet, 'C2:C1000', joists, true);
+  setColumnValidation(pipelineSheet, 'D2:D1000', clipsAndFasteners, true);
+  setColumnValidation(pipelineSheet, 'E2:E1000', clipsAndFasteners, true);
+  setColumnValidation(pipelineSheet, 'F2:F1000', corners, true);
+  setColumnValidation(pipelineSheet, 'G2:G1000', uniboards, true);
   setColumnValidation(pipelineSheet, 'H2:H1000', steps, true);
-  setColumnValidation(pipelineSheet, 'I2:I1000', clipsAndFasteners);
+  setColumnValidation(pipelineSheet, 'I2:I1000', fixingScrews, true);
 }
 
 function extractSkusFromSheet(sheet) {

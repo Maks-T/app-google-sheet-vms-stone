@@ -116,10 +116,13 @@ function autoFitColumns(sheet, count) {
 }
 
 function setColumnValidation(sheet, rangeA1, valuesList, allowInvalid) {
-  if (!valuesList || valuesList.length === 0) return;
+  if (!valuesList || valuesList.length === 0) {
+    sheet.getRange(rangeA1).clearDataValidations();
+    return;
+  }
   const rule = SpreadsheetApp.newDataValidation()
     .requireValueInList(valuesList, true)
-    .setAllowInvalid(!!allowInvalid)
+    .setAllowInvalid(true)
     .build();
   sheet.getRange(rangeA1).setDataValidation(rule);
 }

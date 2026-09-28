@@ -159,6 +159,7 @@ function collectAllProductsFromSheets(ss) {
         if (lengthMm) eav.length_mm = lengthMm;
         if (widthMm) eav.width_mm = widthMm;
         if (thicknessMm) eav.thickness_mm = thicknessMm;
+        if (sourceUrl) eav.source_url = sourceUrl;
 
         if (colorSlug && usedColors.has(colorSlug)) {
           eav.color = usedColors.get(colorSlug).option_code;
@@ -183,6 +184,9 @@ function collectAllProductsFromSheets(ss) {
 
       const currentProduct = productsMap.get(productCode);
       const isDefault = currentProduct.variants.length === 0;
+      if (!currentProduct.preview_picture && imageUrl) {
+        currentProduct.preview_picture = imageUrl;
+      }
 
       // Модификация (ProductVariant / SKU)
       const variantPayload = {
@@ -196,6 +200,7 @@ function collectAllProductsFromSheets(ss) {
         cost_price: costPrice,
         currency: "KZT",
         price: priceRetail,
+        preview_picture: imageUrl,
         eav: [],
         is_active: true
       };
@@ -303,6 +308,7 @@ function getStandardProductTypesDefinition() {
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
         { code: "thickness_mm", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
         { code: "color", is_variant_only: true }
       ]
     },
@@ -317,6 +323,7 @@ function getStandardProductTypesDefinition() {
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
         { code: "thickness_mm", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
         { code: "color", is_variant_only: true }
       ]
     },
@@ -331,6 +338,7 @@ function getStandardProductTypesDefinition() {
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
         { code: "thickness_mm", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
         { code: "color", is_variant_only: true }
       ]
     },
@@ -341,6 +349,7 @@ function getStandardProductTypesDefinition() {
       name: { ru: "Кляймеры и кронштейны", en: "Clips and Brackets" },
       attached_attributes: [
         { code: "brand", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
         { code: "product_calc_category", is_variant_only: false }
       ]
     },
@@ -351,6 +360,7 @@ function getStandardProductTypesDefinition() {
       name: { ru: "Крепеж и саморезы", en: "Fasteners and Screws" },
       attached_attributes: [
         { code: "brand", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
         { code: "product_calc_category", is_variant_only: false }
       ]
     },
@@ -361,6 +371,7 @@ function getStandardProductTypesDefinition() {
       name: { ru: "Декоративные изделия (уголки)", en: "Decorative Corners" },
       attached_attributes: [
         { code: "brand", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
         { code: "product_calc_category", is_variant_only: false }
       ]
     },
@@ -374,6 +385,7 @@ function getStandardProductTypesDefinition() {
         { code: "product_calc_category", is_variant_only: false },
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
         { code: "thickness_mm", is_variant_only: false }
       ]
     }
@@ -494,6 +506,14 @@ function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
       name: { ru: "Цвет", en: "Color" },
       is_multiple: false,
       options: colorOptions
+    },
+    {
+      external_code: "attr_source_url",
+      code: "source_url",
+      type: "string",
+      name: { ru: "Ссылка на товар", en: "Product URL" },
+      is_multiple: false,
+      options: []
     }
   ];
 }
