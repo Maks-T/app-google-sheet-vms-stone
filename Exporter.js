@@ -58,7 +58,7 @@ function exportFullCatalogJson() {
     types: getStandardProductTypesDefinition(),
     attributes: attributesSection,
     products: productsResult.products,
-    pipelines: [getTerracePipelineDefinition()],
+    pipelines: [getTerracePipelineDefinition(), getJoistPipelineDefinition()],
     binding_rules: bindingRules
   };
 
@@ -177,7 +177,6 @@ function collectAllProductsFromSheets(ss) {
           eav: eav,
           variants: [],
           preview_picture: imageUrl,
-          detail_picture: imageUrl,
           source_url: sourceUrl
         });
       }
@@ -204,6 +203,9 @@ function collectAllProductsFromSheets(ss) {
       currentProduct.variants.push(variantPayload);
     }
   });
+
+  // Внедрение системного крепежа по умолчанию (саморезы для лаг и зашивки)
+  ensureDefaultFasteners(productsMap);
 
   return {
     products: Array.from(productsMap.values()),
@@ -238,9 +240,10 @@ function collectAllBindingRules(ss) {
     const noseSize = data[i][9] || 20;
     const holes = data[i][10] || 1;
 
-    // 1. Монтажная лага (joist)
+    // 1. Монтажная лага (joist -> fixing в пайплайне pl_joist)
     if (joist) {
-      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'joist', parentSku, joist, 50, `Связь joist: ${parentName}`));
+      const screwSku = fixing || 'sku_00124';
+      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_joist', 'fixing', joist, screwSku, 10, `Крепление лаги (саморез): ${joist}`));
     }
 
     // 2. Стартовый кляймер (startClip) + параметр holes
@@ -512,13 +515,6 @@ function getTerracePipelineDefinition() {
     ui_state: [],
     schema: {
       terraceBoard: {
-        joist: {
-          label_key: { ru: "Монтажная лага", en: "Substructure Joist" },
-          target_type: "product_type",
-          target_code: "joist",
-          is_required: true,
-          is_multiple: false
-        },
         startClip: {
           label_key: { ru: "Стартовый кляймер", en: "Start Clip" },
           target_type: "product_type",
@@ -584,4 +580,69 @@ function getTerracePipelineDefinition() {
       }
     }
   };
+}
+
+/**
+ * Определение пайплайна pl_joist (подсистема и лаги)
+ */
+function getJoistPipelineDefinition() {
+  return {
+    external_code: "pl_joist",
+    code: "pl_joist",
+    slug: "joist",
+    name: {
+      ru: "Конфигуратор подсистемы и лаг (ДПК / Алюминий)",
+      en: "Substructure and Joist Configurator"
+    },
+    is_active: true,
+    sort_order: 30,
+    ui_state: [],
+    schema: {
+      joist: {
+        fixing: {
+          label_key: { ru: "Крепление лаги (саморез)", en: "Joist Screw" },
+          target_type: "product_type",
+          target_code: "fasteners",
+          is_required: true,
+          is_multiple: false
+        }
+      }
+    }
+  };
+}
+
+/**
+ * Гарантированное внедрение системных саморезов по умолчанию для работы калькулятора
+ */
+function ensureDefaultFasteners(productsMap) {
+  if (!productsMap.has('prod_00124')) {
+    productsMap.set('prod_00124', {
+      external_code: "prod_00124",
+      product_type_external_code: "type_fasteners",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "samorez-5-120",
+      name: { ru: "Саморез 5*120", en: "Screw 5*120" },
+      code: "00124",
+      is_active: true,
+      eav: { brand: "opt_brand_greendecks", material: "Металл" },
+      variants: [{
+        external_code: "sku_00124",
+        sku: "00124",
+        name: { ru: "Саморез 5*120", en: "Screw 5*120" },
+        price_group_external_code: null,
+        stock: 1000,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 30,
+        currency: "KZT",
+        price: 60,
+        eav: [],
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
 }

@@ -1,6 +1,6 @@
 /**
  * GreenDecksParser.js — Модуль парсинга страниц товаров Bitrix24 магазина GreenDecks (greendecks.kz)
- * Поддерживает извлечение уникальных фото слайдера под каждый цвет, чистые латинские слаги и нормализацию URL.
+ * Поддерживает точный разбор всех офферов Битрикса и привязку уникальных полноразмерных фото под каждый цвет.
  */
 
 /**
@@ -14,7 +14,7 @@
 function parseGreenDecksProductPage(html, url, defaultType) {
   const cleanUrl = cleanProductUrl(url);
 
-  // 1. Изолируем только карточку товара, полностью отсекая блок рекомендаций
+  // 1. Изолируем карточку товара от сопутствующих товаров
   const mainHtml = isolateMainProductHtml(html);
 
   const name = extractGreenDecksTitle(mainHtml, cleanUrl);
@@ -23,11 +23,11 @@ function parseGreenDecksProductPage(html, url, defaultType) {
   const brand = detectGreenDecksBrand(mainHtml, name, cleanUrl);
   const price = extractGreenDecksPrice(mainHtml);
 
-  // 2. Извлекаем главное фото из главного слайдера (/iblock/...)
+  // 2. Извлекаем главное фото из слайдера
   const mainImage = extractGreenDecksMainSliderImage(mainHtml);
 
-  // 3. Извлекаем торговые предложения (SKU) с привязкой УНИКАЛЬНЫХ фото каждого цвета из слайдера
-  const colorVariants = extractGreenDecksOffers(mainHtml, name, cleanUrl, mainImage, price);
+  // 3. Извлекаем торговые предложения (SKU) с ТОЧНОЙ привязкой уникальных фото под каждый цвет
+  const colorVariants = extractGreenDecksOffers(mainHtml, html, name, cleanUrl, mainImage, price);
 
   return {
     name: name,
@@ -49,8 +49,7 @@ function parseGreenDecksProductPage(html, url, defaultType) {
  */
 function cleanProductUrl(url) {
   if (!url) return '';
-  const clean = url.split('?')[0].replace(/\/+$/, '') + '/';
-  return clean;
+  return url.split('?')[0].replace(/\/+$/, '') + '/';
 }
 
 /**
@@ -211,30 +210,48 @@ function detectGreenDecksBrand(mainHtml, title, url) {
 }
 
 /**
- * 6. Извлечение БОЛЬШОГО фото из главного слайдера карточки товара (/iblock/...)
+ * 6. Извлечение БОЛЬШОГО фото из главного слайдера карточки товара
  */
 function extractGreenDecksMainSliderImage(mainHtml) {
-  const sliderImgMatch = /<div[^>]*class=["'][^"']*product-item-detail-slider-image[^"']*["'][^>]*>\s*<img[^>]+src=["']([^"']+\/iblock\/[^"']+)["']/i.exec(mainHtml);
-  if (sliderImgMatch) return sliderImgMatch[1];
+  const sliderImgMatch = /<div[^>]*class=["'][^"']*product-item-detail-slider-image[^"']*["'][^>]*>\s*<img[^>]+src=["']([^"']+\.(?:webp|jpg|png|jpeg))["']/i.exec(mainHtml);
+  if (sliderImgMatch && isValidProductImage(sliderImgMatch[1])) {
+    return sliderImgMatch[1];
+  }
 
-  const anyIblockMatch = /<div[^>]*class=["'][^"']*product-item-detail-slider-block[^"']*["'][^>]*>[\s\S]*?<img[^>]+src=["']([^"']+\/iblock\/[^"']+)["']/i.exec(mainHtml);
-  if (anyIblockMatch) return anyIblockMatch[1];
+  const itempropMatch = /<img[^>]+itemprop=["']image["'][^>]+src=["']([^"']+)["']/i.exec(mainHtml)
+    || /<img[^>]+src=["']([^"']+)["'][^>]+itemprop=["']image["']/i.exec(mainHtml);
+  if (itempropMatch && isValidProductImage(itempropMatch[1])) {
+    return itempropMatch[1];
+  }
+
+  const anySliderMatch = /<div[^>]*class=["'][^"']*product-item-detail-slider-block[^"']*["'][^>]*>[\s\S]*?<img[^>]+src=["']([^"']+\.(?:webp|jpg|png|jpeg))["']/i.exec(mainHtml);
+  if (anySliderMatch && isValidProductImage(anySliderMatch[1])) {
+    return anySliderMatch[1];
+  }
 
   const ogMatch = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(mainHtml);
-  if (ogMatch) return ogMatch[1];
+  if (ogMatch && isValidProductImage(ogMatch[1])) {
+    return ogMatch[1];
+  }
 
-  return null;
+  return '';
+}
+
+function isValidProductImage(url) {
+  if (!url) return false;
+  if (url.includes('no_photo') || url.endsWith('.svg') || url.includes('data:image')) return false;
+  return url.startsWith('http');
 }
 
 /**
- * 7. Извлечение торговых предложений (SKU модификаций) с УНИКАЛЬНЫМИ фото каждого цвета из слайдера
+ * 7. Извлечение торговых предложений (SKU модификаций) с УНИКАЛЬНЫМИ фото каждого цвета
  */
-function extractGreenDecksOffers(mainHtml, title, url, defaultMainImage, defaultPrice) {
+function extractGreenDecksOffers(mainHtml, fullHtml, title, url, defaultMainImage, defaultPrice) {
   const variants = [];
   const seenSlugs = new Set();
 
-  // Собираем точную карту фотографий предложений по ID цвета и по блокам слайдера
-  const offerImagesMap = buildOfferImageMap(mainHtml);
+  // Собираем точную карту фотографий из скрипта JCCatalogElement (OFFERS)
+  const offerImagesMap = buildAdvancedOfferImageMap(fullHtml || mainHtml);
 
   // Сканируем цветовую палитру Битрикс внутри изолированной карточки
   const colorBlockMatch = /<div[^>]+data-entity=["']sku-line-block["'][^>]*>[\s\S]*?Цвет[\s\S]*?<\/ul>/i.exec(mainHtml);
@@ -250,14 +267,18 @@ function extractGreenDecksOffers(mainHtml, title, url, defaultMainImage, default
       const colorValueId = match[2].trim();
       if (!rawColorTitle || rawColorTitle === '-') continue;
 
-      // 1. Ищем фото по прямому ID цвета (colorValueId)
-      // 2. Если нет — по индексу соответствующего контейнера слайдера в DOM
-      // 3. Если нет — фоллбэк на главное фото слайдера
-      let colorImage = offerImagesMap[colorValueId]
-        || (offerImagesMap._domSliderImages && offerImagesMap._domSliderImages[colorIdx])
+      const colorInfo = mapColorNameToOption(rawColorTitle);
+
+      // Ищем уникальное фото:
+      // 1. По ID значения цвета (data-onevalue)
+      // 2. По соответствию имени файла названию цвета (krasnyj, seryj, bezhevyj)
+      // 3. По индексу слайдера в DOM
+      // 4. Фоллбэк на главное фото
+      let colorImage = offerImagesMap.byColorId[colorValueId]
+        || offerImagesMap.bySlug[colorInfo.slug]
+        || (offerImagesMap.sliderList && offerImagesMap.sliderList[colorIdx])
         || defaultMainImage;
 
-      const colorInfo = mapColorNameToOption(rawColorTitle);
       if (!seenSlugs.has(colorInfo.slug)) {
         seenSlugs.add(colorInfo.slug);
         variants.push({
@@ -290,59 +311,105 @@ function extractGreenDecksOffers(mainHtml, title, url, defaultMainImage, default
 }
 
 /**
- * Извлечение уникальных фото слайдера под каждый цвет:
- * 1. Через парсинг JS массива OFFERS (сопоставление PROP_130 -> DETAIL_PICTURE)
- * 2. Через парсинг DOM контейнеров slider_cont_<OFFER_ID>
+ * Комплексный сбор всех фото торговых предложений из JS-структур Битрикса
  */
-function buildOfferImageMap(mainHtml) {
-  const map = {};
-  const domSliderImages = [];
+function buildAdvancedOfferImageMap(html) {
+  const map = {
+    byColorId: {},
+    bySlug: {},
+    sliderList: []
+  };
 
-  // А. Парсим JS блок OFFERS по изолированным чанкам
-  const offersIdx = mainHtml.indexOf("'OFFERS':");
-  if (offersIdx !== -1) {
-    const offersEndIdx = mainHtml.indexOf("'OFFER_SELECTED'", offersIdx);
-    const offersBlock = offersEndIdx !== -1
-      ? mainHtml.substring(offersIdx, offersEndIdx)
-      : mainHtml.substring(offersIdx, offersIdx + 25000);
-
-    const offerChunks = offersBlock.split(/'ID':\s*'(\d+)'/);
-    for (let i = 1; i < offerChunks.length; i += 2) {
-      const offerId = offerChunks[i];
-      const chunk = offerChunks[i + 1] || '';
-
-      const propMatch = /'PROP_130':\s*'(\d+)'/i.exec(chunk);
-      const imgMatch = /'(?:DETAIL_PICTURE|PREVIEW_PICTURE)':\s*\{[^}]*'SRC':\s*'([^']+)'/i.exec(chunk)
-        || /'SLIDER':\s*\[\s*\{[^}]*'SRC':\s*'([^']+)'/i.exec(chunk);
-
-      if (propMatch && imgMatch) {
-        map[propMatch[1]] = imgMatch[1];
-        map['offer_' + offerId] = imgMatch[1];
-      }
-    }
-  }
-
-  // Б. Парсим DOM-контейнеры элементов управления слайдером: slider_cont_<OFFER_ID>
-  const sliderBlockRegex = /id=["'][^"']*slider_cont_(\d+)["'][^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
+  // 1. Извлечение всех картинок из контейнеров слайдеров (slider_cont_<OFFER_ID>)
+  const sliderContRegex = /id=["'][^"']*slider_cont_(\d+)["'][^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
   let sMatch;
-  while ((sMatch = sliderBlockRegex.exec(mainHtml)) !== null) {
+  while ((sMatch = sliderContRegex.exec(html)) !== null) {
     const offerId = sMatch[1];
-    const blockContent = sMatch[2];
-    const imgMatch = /<img[^>]+src=["']([^"']+\/iblock\/[^"']+)["']/i.exec(blockContent);
-    if (imgMatch) {
-      map['offer_' + offerId] = imgMatch[1];
-      if (!domSliderImages.includes(imgMatch[1])) {
-        domSliderImages.push(imgMatch[1]);
+    const block = sMatch[2];
+    const imgMatch = /<img[^>]+src=["']([^"']+\.(?:webp|jpg|png|jpeg))["']/i.exec(block);
+    if (imgMatch && isValidProductImage(imgMatch[1])) {
+      map.byColorId['offer_' + offerId] = imgMatch[1];
+      if (!map.sliderList.includes(imgMatch[1])) {
+        map.sliderList.push(imgMatch[1]);
       }
     }
   }
 
-  map._domSliderImages = domSliderImages;
+  // 2. Извлечение из JavaScript-конфигурации JCCatalogElement -> OFFERS
+  const offersIdx = html.indexOf("'OFFERS':");
+  if (offersIdx !== -1) {
+    const offersEndIdx = html.indexOf("'OFFER_SELECTED'", offersIdx);
+    const offersBlock = offersEndIdx !== -1
+      ? html.substring(offersIdx, offersEndIdx)
+      : html.substring(offersIdx, offersIdx + 30000);
+
+    const offerBlocks = offersBlock.split(/'ID':\s*'(\d+)'/);
+    for (let i = 1; i < offerBlocks.length; i += 2) {
+      const offerId = offerBlocks[i];
+      const chunk = offerBlocks[i + 1] || '';
+
+      // ID цвета PROP_130
+      const propMatch = /'PROP_130':\s*'(\d+)'/i.exec(chunk);
+      const colorId = propMatch ? propMatch[1] : null;
+
+      // Ищем картинку в любом из полей оффера: DETAIL_PICTURE, PREVIEW_PICTURE, SLIDER, MORE_PHOTO
+      let imgSrc = null;
+      const detailMatch = /'(?:DETAIL_PICTURE|PREVIEW_PICTURE)':\s*\{[^}]*'SRC':\s*'([^']+)'/i.exec(chunk);
+      if (detailMatch && isValidProductImage(detailMatch[1])) {
+        imgSrc = detailMatch[1];
+      } else {
+        const sliderMatch = /'SRC':\s*'([^']+\.(?:webp|jpg|png|jpeg))'/i.exec(chunk);
+        if (sliderMatch && isValidProductImage(sliderMatch[1])) {
+          imgSrc = sliderMatch[1];
+        }
+      }
+
+      if (imgSrc) {
+        if (colorId) map.byColorId[colorId] = imgSrc;
+        map.byColorId['offer_' + offerId] = imgSrc;
+
+        if (!map.sliderList.includes(imgSrc)) {
+          map.sliderList.push(imgSrc);
+        }
+
+        // Индексация по имени файла (например krasnyj-brushing-mix -> terracotta)
+        indexImageByFileName(imgSrc, map.bySlug);
+      }
+    }
+  }
+
+  // 3. Сканирование всех ссылок на картинки в HTML для надежного сопоставления по имени
+  const allImagesRegex = /https:\/\/cdn-ru\.bitrix24\.kz\/b30011694\/uf\/[^"'\s>]+\.(?:webp|jpg|png|jpeg)/gi;
+  let urlMatch;
+  while ((urlMatch = allImagesRegex.exec(html)) !== null) {
+    const imgUrl = urlMatch[0];
+    if (isValidProductImage(imgUrl)) {
+      indexImageByFileName(imgUrl, map.bySlug);
+    }
+  }
+
   return map;
 }
 
 /**
- * Определение цвета из названия товара или URL (для товаров с 1 цветом на странице)
+ * Сопоставление имени графического файла с цветовым слагом (на случай, если ID свойств скрыты)
+ */
+function indexImageByFileName(imgUrl, slugMap) {
+  const lower = imgUrl.toLowerCase();
+  if (lower.includes('bezhev') || lower.includes('beige')) slugMap['beige'] = imgUrl;
+  if (lower.includes('krasn') || lower.includes('red')) slugMap['terracotta'] = imgUrl;
+  if (lower.includes('pesochn') || lower.includes('sand')) slugMap['sand'] = imgUrl;
+  if (lower.includes('seryj') || lower.includes('grey') || lower.includes('gray')) slugMap['grey'] = imgUrl;
+  if (lower.includes('svetlo-korichn') || lower.includes('light_brown')) slugMap['light_brown'] = imgUrl;
+  if (lower.includes('temno-korichn') || lower.includes('dark_brown')) slugMap['dark_brown'] = imgUrl;
+  if (lower.includes('venge') || lower.includes('wenge')) slugMap['wenge'] = imgUrl;
+  if (lower.includes('shokolad') || lower.includes('chocolate')) slugMap['chocolate'] = imgUrl;
+  if (lower.includes('dub') || lower.includes('oak')) slugMap['oak'] = imgUrl;
+  if (lower.includes('antrats') || lower.includes('black')) slugMap['black_wood'] = imgUrl;
+}
+
+/**
+ * Определение цвета из названия товара или URL
  */
 function detectColorFromTitleOrUrl(title, url) {
   const text = (title + ' ' + url).toLowerCase();
@@ -368,7 +435,7 @@ function detectColorFromTitleOrUrl(title, url) {
 }
 
 /**
- * 8. Сопоставление названия цвета со словарем VMS-NC (только латинские слаги и точный HEX)
+ * 8. Сопоставление названия цвета со словарем VMS-NC
  */
 function mapColorNameToOption(colorTitle) {
   const lower = colorTitle.toLowerCase().trim();
@@ -376,7 +443,7 @@ function mapColorNameToOption(colorTitle) {
   if (lower.includes('венге') || lower.includes('wenge'))
     return { slug: 'wenge', option_code: 'opt_venge', hex: '#3B2219' };
 
-  if (lower.includes('черное дерево') || lower.includes('black wood') || lower.includes('черный') || lower.includes('black'))
+  if (lower.includes('черное дерево') || lower.includes('черный') || lower.includes('black'))
     return { slug: 'black_wood', option_code: 'opt_antracit', hex: '#1A1A1A' };
 
   if (lower.includes('антрацит') || lower.includes('anthracite'))
@@ -435,6 +502,9 @@ function mapColorNameToOption(colorTitle) {
 
   if (lower.includes('песочный') || lower.includes('sand') || lower.includes('бронза'))
     return { slug: 'sand', option_code: 'opt_pesocnyi', hex: '#A07855' };
+
+  if (lower.includes('бежевый') || lower.includes('beige'))
+    return { slug: 'beige', option_code: 'opt_dub', hex: '#C4A77D' };
 
   const translitSlug = transliterate(lower).replace(/[^a-z0-9_]/gi, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').substring(0, 15);
   return {

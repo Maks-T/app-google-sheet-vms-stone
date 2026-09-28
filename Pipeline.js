@@ -249,9 +249,10 @@ function exportBindingRulesJson() {
     const noseSize = data[i][9] || 20;
     const holes = data[i][10] || 1;
 
-    // 1. Монтажная лага (joist)
+    // 1. Монтажная лага (joist -> fixing в пайплайне pl_joist)
     if (joist) {
-      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'joist', parentSku, joist, 50, `Связь joist: ${parentName}`));
+      const screwSku = fixing || 'sku_00124';
+      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_joist', 'fixing', joist, screwSku, 10, `Крепление лаги (саморез): ${joist}`));
     }
 
     // 2. Стартовый кляймер (startClip) + параметр holes
