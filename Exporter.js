@@ -123,7 +123,10 @@ function collectAllProductsFromSheets(ss) {
       const costPrice = parseFloat(data[r][13]) || (priceRetail > 0 ? Math.round(priceRetail * 0.7) : null);
       const imageUrl = String(data[r][14] || '').trim() || null;
       const rawSourceUrl = String(data[r][15] || '').trim() || null;
-      const sourceUrl = cleanProductUrl(rawSourceUrl);
+      let sourceUrl = cleanProductUrl(rawSourceUrl);
+      if (!sourceUrl || sourceUrl.length < 12 || (!sourceUrl.startsWith('http://') && !sourceUrl.startsWith('https://'))) {
+        sourceUrl = (rawSourceUrl && rawSourceUrl.length > 10 && rawSourceUrl.startsWith('http')) ? rawSourceUrl : null;
+      }
 
       if (!productCode || !sku) continue;
 
@@ -200,9 +203,20 @@ function collectAllProductsFromSheets(ss) {
         variantEav.color = usedColors.get(effectiveColorSlug).option_code;
       }
 
+      // Автоматическая защита от дубликатов SKU вариантов внутри одного продукта
+      let uniqueSku = sku;
+      if (currentProduct.variants.some(v => v.sku === uniqueSku)) {
+        const noMatch = /(?:№|no\.?|номер|_no)\s*(\d+)/i.exec(name);
+        if (noMatch && !uniqueSku.includes('no' + noMatch[1])) {
+          uniqueSku += '_no' + noMatch[1];
+        } else {
+          uniqueSku += '_' + (currentProduct.variants.length + 1);
+        }
+      }
+
       const variantPayload = {
-        external_code: sku,
-        sku: sku,
+        external_code: uniqueSku,
+        sku: uniqueSku,
         name: { ru: name, en: name },
         price_group_external_code: null,
         stock: null,
@@ -457,6 +471,7 @@ function getStandardProductTypesDefinition() {
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
         { code: "height_mm", is_variant_only: false },
+        { code: "thickness_mm", is_variant_only: false },
         { code: "source_url", is_variant_only: false },
         { code: "product_calc_category", is_variant_only: false }
       ]
@@ -472,7 +487,8 @@ function getStandardProductTypesDefinition() {
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
         { code: "source_url", is_variant_only: false },
-        { code: "thickness_mm", is_variant_only: false }
+        { code: "thickness_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false }
       ]
     },
     {

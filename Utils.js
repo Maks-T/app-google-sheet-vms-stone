@@ -165,7 +165,7 @@ function generateGdkExternalCode(brandCode, slugOrName, width, thickness) {
     .replace(/[^a-z0-9_]/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '')
-    .substring(0, 30);
+    .substring(0, 60);
 
   const dimsPart = (width && thickness) ? `_${width}_${thickness}` : '';
   return `odk_${brandShort || 'item'}_${cleanSlug}${dimsPart}`.replace(/_+/g, '_');

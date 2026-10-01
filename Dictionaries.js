@@ -59,7 +59,15 @@ function getCalculatorSettingsDictionary() {
     { slug: "fenceMaxHeight", value: 1500, sort: 15 },
     { slug: "fenceMinGridSize", value: 50, sort: 16 },
     { slug: "fenceMaxGridSize", value: 200, sort: 17 },
-    { slug: "targetDeviation", value: 0.002, sort: 18 }
+    { slug: "targetDeviation", value: 0.002, sort: 18 },
+    { slug: "pedestalMaxStep", value: 500, sort: 19 },
+    { slug: "pedestalEdgeOffset", value: 80, sort: 20 },
+    { slug: "rebarMaxStep", value: 800, sort: 21 },
+    { slug: "rebarEdgeOffset", value: 80, sort: 22 },
+    { slug: "rebarEmbedDepth", value: 150, sort: 23 },
+    { slug: "rebarCutMargin", value: 100, sort: 24 },
+    { slug: "pileEdgeOffset", value: 200, sort: 25 },
+    { slug: "minTerraceHeightPile", value: 250, sort: 26 }
   ];
 
   return {
