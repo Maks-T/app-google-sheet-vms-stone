@@ -362,12 +362,18 @@ function extractOliverDeckOffers(html, title, url, defaultMainImage, defaultPric
       let colorImg = bgMatch ? bgMatch[1].replace(/['"]/g, '') : (imgMatch ? imgMatch[1] : defaultMainImage);
       colorImg = resolveFullImageUrl(colorImg);
 
-      if (!seenSlugs.has(colorInfo.slug)) {
-        seenSlugs.add(colorInfo.slug);
+      let variantSlug = colorInfo.slug;
+      const noMatch = /(?:№|no\.?|номер|_no)\s*(\d+)/i.exec(title + ' ' + url);
+      if (noMatch && !variantSlug.includes('no' + noMatch[1])) {
+        variantSlug += '_no' + noMatch[1];
+      }
+
+      if (!seenSlugs.has(variantSlug)) {
+        seenSlugs.add(variantSlug);
         variants.push({
           kind_id: kindId,
           name: rawColorName,
-          slug: colorInfo.slug,
+          slug: variantSlug,
           option_code: colorInfo.option_code,
           hex: colorInfo.hex,
           image_url: colorImg || defaultMainImage,
@@ -380,10 +386,16 @@ function extractOliverDeckOffers(html, title, url, defaultMainImage, defaultPric
   // Если у товара нет выбора цветов (опоры, лаги, трубы, крепеж)
   if (variants.length === 0) {
     const detectedColor = detectColorFromTitleOrUrl(title, url);
+    let variantSlug = detectedColor.slug;
+    const noMatch = /(?:№|no\.?|номер|_no)\s*(\d+)/i.exec(title + ' ' + url);
+    if (noMatch && !variantSlug.includes('no' + noMatch[1])) {
+      variantSlug += '_no' + noMatch[1];
+    }
+
     variants.push({
       kind_id: null,
-      name: detectedColor.name,
-      slug: detectedColor.slug,
+      name: detectedColor.name + (noMatch ? ' (№' + noMatch[1] + ')' : ''),
+      slug: variantSlug,
       option_code: detectedColor.option_code,
       hex: detectedColor.hex,
       image_url: defaultMainImage,

@@ -252,7 +252,10 @@ function collectAllBindingRules(ss) {
     const corner = String(data[i][5] || '').trim();
     const universalBoardsRaw = String(data[i][6] || '').trim();
     const stepBoardsRaw = String(data[i][7] || '').trim();
-    const fixing = String(data[i][8] || '').trim() || '00124';
+    let fixing = String(data[i][8] || '').trim();
+    if (!fixing || fixing === '124' || fixing === 'sku_00124') {
+      fixing = '00124';
+    }
     const noseSize = data[i][9] || 20;
     const holes = data[i][10] || 1;
 
