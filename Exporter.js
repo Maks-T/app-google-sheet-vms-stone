@@ -1,6 +1,6 @@
 /**
  * Exporter.js — Экспорт полного пакета каталога в import_data.json для платформы VMS-NC
- * Контракт полностью синхронизирован со схемой отраслевого пакета WPC и калькулятором.
+ * Контракт полностью синхронизирован со схемой отраслевого пакета WPC и калькулятором oliver-deck.
  */
 
 /**
@@ -27,10 +27,10 @@ function exportFullCatalogJson() {
     languages: ["ru", "en"],
     currencies: [
       {
-        code: "KZT",
-        symbol: "₸",
-        symbol_native: { ru: "тенге", en: "₸" },
-        name: { ru: "Казахстанский тенге", en: "Kazakhstani Tenge" },
+        code: "RUB",
+        symbol: "₽",
+        symbol_native: { ru: "руб.", en: "rub." },
+        name: { ru: "Российский рубль", en: "Russian Ruble" },
         rate: 1,
         is_default: true,
         is_active: true
@@ -39,24 +39,22 @@ function exportFullCatalogJson() {
     price_types: [
       {
         slug: "retail",
-        currency_code: "KZT",
+        currency_code: "RUB",
         is_default: true,
         name: { ru: "Цена продажи", en: "Retail" },
         description: {
-          ru: "Розничная цена с сайта greendecks.kz",
-          en: "Retail price from greendecks.kz"
+          ru: "Розничная цена с сайта oliverdeck.ru",
+          en: "Retail price from oliverdeck.ru"
         }
       }
     ],
     families: [
-      {
-        external_code: "fam_decking_systems",
-        code: "decking_system",
-        name: { ru: "Террасный настил", en: "Terrace Decking Systems" }
-      }
+      GDK_CONFIG.FAMILIES.DECKING_SYSTEM,
+      GDK_CONFIG.FAMILIES.HARDWARE_ACCESSORY
     ],
     types: getStandardProductTypesDefinition(),
     attributes: attributesSection,
+    complex_dictionaries: getComplexDictionariesDefinition(),
     products: productsResult.products,
     pipelines: [getTerracePipelineDefinition(), getJoistPipelineDefinition()],
     binding_rules: bindingRules
@@ -88,7 +86,9 @@ function collectAllProductsFromSheets(ss) {
     { sheetName: '3. Уголки и декор', type: 'decorProducts' },
     { sheetName: '4. Универсальная доска (зашивка)', altName: '4. Доска обрамления', type: 'board' },
     { sheetName: '5. Лаги', type: 'joist' },
-    { sheetName: '6. Кляймеры и крепеж', type: 'brackets' }
+    { sheetName: '6. Кляймеры и крепеж', type: 'brackets' },
+    { sheetName: '7. Регулируемые опоры', type: 'adjustable_pedestal' },
+    { sheetName: '8. Каркас и балки', altName: '8. Балки и сваи', type: 'foundation_beam' }
   ];
 
   const productsMap = new Map();
@@ -111,7 +111,7 @@ function collectAllProductsFromSheets(ss) {
       const productCode = String(data[r][1] || '').trim();
       const sku = String(data[r][2] || '').trim();
       const name = String(data[r][3] || '').trim();
-      const brand = String(data[r][4] || '').trim() || 'opt_brand_greendecks';
+      const brand = String(data[r][4] || '').trim() || 'opt_brand_oliverdeck';
       const material = String(data[r][5] || '').trim() || 'ДПК (Древесно-полимерный композит)';
       const colorName = String(data[r][6] || '').trim();
       const colorSlug = String(data[r][7] || '').trim().toLowerCase();
@@ -127,7 +127,6 @@ function collectAllProductsFromSheets(ss) {
 
       if (!productCode || !sku) continue;
 
-      // Определение типа: саморезы на Листе 6 относим к type_fasteners
       let actualProductTypeExt = defaultProductTypeExt;
       if (typeKey === 'brackets') {
         const lowerName = name.toLowerCase();
@@ -148,7 +147,7 @@ function collectAllProductsFromSheets(ss) {
       // Базовый продукт (Product)
       if (!productsMap.has(productCode)) {
         const cleanBaseName = name.replace(/\s*\([^)]*\)\s*/g, '').trim();
-        const baseSlug = productCode.replace(/_/g, '-').replace(/^gdk-/, '');
+        const baseSlug = productCode.replace(/_/g, '-').replace(/^odk-/, '').replace(/^gdk-/, '');
 
         const eav = {
           material: material,
@@ -156,14 +155,20 @@ function collectAllProductsFromSheets(ss) {
         };
 
         if (calcCategory) eav.product_calc_category = calcCategory;
-        if (lengthMm) eav.length_mm = lengthMm;
-        if (widthMm) eav.width_mm = widthMm;
-        if (thicknessMm) eav.thickness_mm = thicknessMm;
-        if (sourceUrl) eav.source_url = sourceUrl;
 
-        if (colorSlug && usedColors.has(colorSlug)) {
-          eav.color = usedColors.get(colorSlug).option_code;
+        if (typeKey === 'adjustable_pedestal') {
+          if (lengthMm) eav.height_min = lengthMm;
+          if (widthMm) eav.height_max = widthMm;
+          if (thicknessMm) eav.max_load_kg = thicknessMm;
+        } else {
+          if (lengthMm) eav.length_mm = lengthMm;
+          if (widthMm) eav.width_mm = widthMm;
+          if (thicknessMm) {
+            eav.thickness_mm = thicknessMm;
+            eav.height_mm = thicknessMm;
+          }
         }
+        if (sourceUrl) eav.source_url = sourceUrl;
 
         productsMap.set(productCode, {
           external_code: productCode,
@@ -189,6 +194,12 @@ function collectAllProductsFromSheets(ss) {
       }
 
       // Модификация (ProductVariant / SKU)
+      const variantEav = {};
+      const effectiveColorSlug = colorSlug || (['terraceBoard', 'stepBoard', 'decorProducts'].includes(typeKey) ? 'natural' : null);
+      if (effectiveColorSlug && usedColors.has(effectiveColorSlug)) {
+        variantEav.color = usedColors.get(effectiveColorSlug).option_code;
+      }
+
       const variantPayload = {
         external_code: sku,
         sku: sku,
@@ -198,10 +209,10 @@ function collectAllProductsFromSheets(ss) {
         is_default: isDefault,
         is_manual_pricing: false,
         cost_price: costPrice,
-        currency: "KZT",
+        currency: "RUB",
         price: priceRetail,
         preview_picture: imageUrl,
-        eav: [],
+        eav: variantEav,
         is_active: true
       };
 
@@ -209,8 +220,8 @@ function collectAllProductsFromSheets(ss) {
     }
   });
 
-  // Внедрение системного крепежа по умолчанию (саморезы для лаг и зашивки)
-  ensureDefaultFasteners(productsMap);
+  // Внедрение системных складских позиций (сваи, оголовки, ЦПС, арматура, крепеж)
+  ensureDefaultSystemItems(productsMap);
 
   return {
     products: Array.from(productsMap.values()),
@@ -241,14 +252,13 @@ function collectAllBindingRules(ss) {
     const corner = String(data[i][5] || '').trim();
     const universalBoardsRaw = String(data[i][6] || '').trim();
     const stepBoardsRaw = String(data[i][7] || '').trim();
-    const fixing = String(data[i][8] || '').trim();
+    const fixing = String(data[i][8] || '').trim() || '00124';
     const noseSize = data[i][9] || 20;
     const holes = data[i][10] || 1;
 
     // 1. Монтажная лага (joist -> fixing в пайплайне pl_joist)
     if (joist) {
-      const screwSku = fixing || 'sku_00124';
-      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_joist', 'fixing', joist, screwSku, 10, `Крепление лаги (саморез): ${joist}`));
+      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_joist', 'fixing', joist, fixing, 10, `Крепление лаги (саморез): ${joist}`));
     }
 
     // 2. Стартовый кляймер (startClip) + параметр holes
@@ -273,9 +283,7 @@ function collectAllBindingRules(ss) {
       const items = universalBoardsRaw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
       items.forEach(childSku => {
         addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'universalBoards', parentSku, childSku, 40, `Связь universalBoards: ${parentName}`, false));
-        if (fixing) {
-          addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'fixing', childSku, fixing, 10, `Связь Крепление доски (саморез): ${childSku}`, true));
-        }
+        addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'fixing', childSku, fixing, 10, `Связь Крепление доски (саморез): ${childSku}`, true));
       });
     }
 
@@ -290,6 +298,75 @@ function collectAllBindingRules(ss) {
   }
 
   return rules;
+}
+
+function addHolesParam(rules, seenRuleCodes, clipSku, holes) {
+  const holesRuleCode = `rule_holes_${clipSku}`;
+  if (!seenRuleCodes.has(holesRuleCode)) {
+    seenRuleCodes.add(holesRuleCode);
+    rules.push({
+      "pipeline_external_code": "pl_terrace",
+      "external_code": holesRuleCode,
+      "name": `Параметр Количество отверстий: ${clipSku}`,
+      "role": "holes",
+      "parent_type_key": "product_variant",
+      "parent_external_code": clipSku,
+      "child_type_key": null,
+      "child_external_code": null,
+      "conditions": null,
+      "static_meta": { "holes": String(holes) },
+      "quantity_formula": "1",
+      "is_required": true,
+      "sort_order": 10
+    });
+  }
+}
+
+function addNoseSizeParam(rules, seenRuleCodes, stepSku, noseSize) {
+  const noseRuleCode = `rule_nose_${stepSku}`;
+  if (!seenRuleCodes.has(noseRuleCode)) {
+    seenRuleCodes.add(noseRuleCode);
+    rules.push({
+      "pipeline_external_code": "pl_terrace",
+      "external_code": noseRuleCode,
+      "name": `Параметр Размер носика: ${stepSku}`,
+      "role": "noseSize",
+      "parent_type_key": "product_variant",
+      "parent_external_code": stepSku,
+      "child_type_key": null,
+      "child_external_code": null,
+      "conditions": null,
+      "static_meta": { "noseSize": String(noseSize) },
+      "quantity_formula": "1",
+      "is_required": true,
+      "sort_order": 10
+    });
+  }
+}
+
+function makeRule(pipeline, role, parentSku, childSku, sortOrder, customName, isRequired) {
+  return {
+    "pipeline_external_code": pipeline,
+    "external_code": `rule_${role}_${parentSku}_${childSku}`.replace(/[^a-zA-Z0-9_]/g, '_'),
+    "name": customName || ("Связь " + role),
+    "role": role,
+    "parent_type_key": "product_variant",
+    "parent_external_code": parentSku,
+    "child_type_key": "product_variant",
+    "child_external_code": childSku,
+    "conditions": null,
+    "static_meta": null,
+    "quantity_formula": "1",
+    "is_required": isRequired !== undefined ? isRequired : true,
+    "sort_order": sortOrder
+  };
+}
+
+function addRuleIfUnique(rulesArray, seenSet, ruleObj) {
+  if (!seenSet.has(ruleObj.external_code)) {
+    seenSet.add(ruleObj.external_code);
+    rulesArray.push(ruleObj);
+  }
 }
 
 /**
@@ -308,6 +385,7 @@ function getStandardProductTypesDefinition() {
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
         { code: "thickness_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
         { code: "source_url", is_variant_only: false },
         { code: "color", is_variant_only: true }
       ]
@@ -323,6 +401,7 @@ function getStandardProductTypesDefinition() {
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
         { code: "thickness_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
         { code: "source_url", is_variant_only: false },
         { code: "color", is_variant_only: true }
       ]
@@ -338,13 +417,14 @@ function getStandardProductTypesDefinition() {
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
         { code: "thickness_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
         { code: "source_url", is_variant_only: false },
         { code: "color", is_variant_only: true }
       ]
     },
     {
       external_code: "type_brackets",
-      family_external_code: "fam_decking_systems",
+      family_external_code: "fam_hardware_accessories",
       code: "brackets",
       name: { ru: "Кляймеры и кронштейны", en: "Clips and Brackets" },
       attached_attributes: [
@@ -355,7 +435,7 @@ function getStandardProductTypesDefinition() {
     },
     {
       external_code: "type_fasteners",
-      family_external_code: "fam_decking_systems",
+      family_external_code: "fam_hardware_accessories",
       code: "fasteners",
       name: { ru: "Крепеж и саморезы", en: "Fasteners and Screws" },
       attached_attributes: [
@@ -366,11 +446,14 @@ function getStandardProductTypesDefinition() {
     },
     {
       external_code: "type_decorProducts",
-      family_external_code: "fam_decking_systems",
+      family_external_code: "fam_hardware_accessories",
       code: "decorProducts",
       name: { ru: "Декоративные изделия (уголки)", en: "Decorative Corners" },
       attached_attributes: [
         { code: "brand", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
         { code: "source_url", is_variant_only: false },
         { code: "product_calc_category", is_variant_only: false }
       ]
@@ -388,6 +471,67 @@ function getStandardProductTypesDefinition() {
         { code: "source_url", is_variant_only: false },
         { code: "thickness_mm", is_variant_only: false }
       ]
+    },
+    {
+      external_code: "type_adjustable_pedestal",
+      family_external_code: "fam_decking_systems",
+      code: "adjustable_pedestal",
+      name: { ru: "Регулируемые винтовые опоры", en: "Adjustable Pedestals" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "height_min", is_variant_only: false },
+        { code: "height_max", is_variant_only: false },
+        { code: "max_load_kg", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
+    },
+    {
+      external_code: "type_foundation_beam",
+      family_external_code: "fam_decking_systems",
+      code: "foundation_beam",
+      name: { ru: "Балка обвязки металлокаркаса", en: "Foundation Beam" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
+        { code: "thickness_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "source_url", is_variant_only: false }
+      ]
+    },
+    {
+      external_code: "type_rebar",
+      family_external_code: "fam_decking_systems",
+      code: "rebar",
+      name: { ru: "Арматура монтажная", en: "Rebar" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false }
+      ]
+    },
+    {
+      external_code: "type_screw_pile",
+      family_external_code: "fam_hardware_accessories",
+      code: "screw_pile",
+      name: { ru: "Винтовые сваи", en: "Screw Piles" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false }
+      ]
+    },
+    {
+      external_code: "type_pile_cap",
+      family_external_code: "fam_hardware_accessories",
+      code: "pile_cap",
+      name: { ru: "Оголовки свай", en: "Pile Caps" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false }
+      ]
     }
   ];
 }
@@ -397,26 +541,18 @@ function getStandardProductTypesDefinition() {
  */
 function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
   const brandOptions = [
+    { external_code: "opt_brand_oliverdeck", slug: "oliverdeck", value: { ru: "OliverDeck", en: "OliverDeck" }, param: "oliverdeck" },
+    { external_code: "opt_brand_level", slug: "level", value: { ru: "Level", en: "Level" }, param: "level" },
+    { external_code: "opt_brand_kronex", slug: "kronex", value: { ru: "Kronex", en: "Kronex" }, param: "kronex" },
+    { external_code: "opt_brand_terrapol", slug: "terrapol", value: { ru: "Terrapol", en: "Terrapol" }, param: "terrapol" },
+    { external_code: "opt_brand_woodvex", slug: "woodvex", value: { ru: "Woodvex", en: "Woodvex" }, param: "woodvex" },
+    { external_code: "opt_brand_cm_decking", slug: "cm-decking", value: { ru: "CM Decking", en: "CM Decking" }, param: "cm-decking" },
+    { external_code: "opt_brand_outdoor", slug: "outdoor", value: { ru: "Outdoor", en: "Outdoor" }, param: "outdoor" },
+    { external_code: "opt_brand_bruggan", slug: "bruggan", value: { ru: "Bruggan", en: "Bruggan" }, param: "bruggan" },
+    { external_code: "opt_brand_unodeck", slug: "unodeck", value: { ru: "UnoDeck", en: "UnoDeck" }, param: "unodeck" },
     { external_code: "opt_brand_legro", slug: "legro", value: { ru: "Legro", en: "Legro" }, param: "legro" },
     { external_code: "opt_brand_easydecking", slug: "easydecking", value: { ru: "EasyDecking", en: "EasyDecking" }, param: "easydecking" },
-    { external_code: "opt_brand_greendecks", slug: "greendecks", value: { ru: "Greendecks", en: "Greendecks" }, param: "greendecks" },
-    { external_code: "opt_brand_timber-essential", slug: "timber-essential", value: { ru: "Timber Essential", en: "Timber Essential" }, param: "timber-essential" },
-    { external_code: "opt_brand_welltouch", slug: "welltouch", value: { ru: "Welltouch", en: "Welltouch" }, param: "welltouch" },
-    { external_code: "opt_brand_pudeck", slug: "pudeck", value: { ru: "PUDECK", en: "PUDECK" }, param: "pudeck" },
-    { external_code: "opt_brand_greenwood", slug: "greenwood", value: { ru: "GreenWOOD", en: "GreenWOOD" }, param: "greenwood" },
-    { external_code: "opt_brand_aludeck", slug: "aludeck", value: { ru: "AluDeck", en: "AluDeck" }, param: "aludeck" },
-    { external_code: "opt_brand_prestige", slug: "prestige", value: { ru: "Prestige", en: "Prestige" }, param: "prestige" },
-    { external_code: "opt_brand_titan", slug: "titan", value: { ru: "Titan", en: "Titan" }, param: "titan" },
-    { external_code: "opt_brand_polyrootd", slug: "polyrootd", value: { ru: "PolyrootD", en: "PolyrootD" }, param: "polyrootd" },
-    { external_code: "opt_brand_master", slug: "master", value: { ru: "Master", en: "Master" }, param: "master" },
-    { external_code: "opt_brand_robust", slug: "robust", value: { ru: "Robust", en: "Robust" }, param: "robust" },
-    { external_code: "opt_brand_nauticprime", slug: "nauticprime", value: { ru: "NauticPrime", en: "NauticPrime" }, param: "nauticprime" },
-    { external_code: "opt_brand_select", slug: "select", value: { ru: "Select", en: "Select" }, param: "select" },
-    { external_code: "opt_brand_crown", slug: "crown", value: { ru: "Crown", en: "Crown" }, param: "crown" },
-    { external_code: "opt_brand_hilst", slug: "hilst", value: { ru: "HILST", en: "HILST" }, param: "hilst" },
-    { external_code: "opt_brand_holzhof", slug: "holzhof", value: { ru: "Holzhof", en: "Holzhof" }, param: "holzhof" },
-    { external_code: "opt_brand_3d-wood", slug: "3d-wood", value: { ru: "3D WOOD", en: "3D WOOD" }, param: "3d-wood" },
-    { external_code: "opt_brand_brushing-mix", slug: "brushing-mix", value: { ru: "Brushing Mix", en: "Brushing Mix" }, param: "brushing-mix" }
+    { external_code: "opt_brand_greendecks", slug: "greendecks", value: { ru: "Greendecks", en: "Greendecks" }, param: "greendecks" }
   ];
 
   usedBrands.forEach(bCode => {
@@ -440,10 +576,15 @@ function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
     { external_code: "opt_koricnevyi", slug: "brown", value: { ru: "Коричневый", en: "Brown" }, param: "brown", meta: { hex: "#654321" } },
     { external_code: "opt_temno-koricnevyi", slug: "dark_brown", value: { ru: "Темно-коричневый", en: "Dark Brown" }, param: "dark_brown", meta: { hex: "#3B2219" } },
     { external_code: "opt_gdk_natural", slug: "natural", value: { ru: "Натураль", en: "Natural" }, param: "natural", meta: { hex: "#C4A77D" } },
-    { external_code: "opt_gdk_korichnevyy_temno", slug: "korichnevyy_temno", value: { ru: "Коричневый/Тёмно-коричневый", en: "Brown / Dark Brown" }, param: "korichnevyy_temno", meta: { hex: "#654321" } },
     { external_code: "opt_gdk_serebristyy", slug: "silver", value: { ru: "Серебристый", en: "Silver" }, param: "silver", meta: { hex: "#C0C0C0" } },
-    { external_code: "opt_gdk_dvukhtsvetnaya", slug: "bicolor", value: { ru: "Двухцветная", en: "Bi-color" }, param: "bicolor", meta: { hex: "#654321" } },
-    { external_code: "opt_belyi", slug: "white", value: { ru: "Белый", en: "White" }, param: "white", meta: { hex: "#F0EBE0" } }
+    { external_code: "opt_belyi", slug: "white", value: { ru: "Белый", en: "White" }, param: "white", meta: { hex: "#F0EBE0" } },
+    { external_code: "opt_chocolate", slug: "chocolate", value: { ru: "Шоколад", en: "Шоколад" }, param: "chocolate", meta: { hex: "#3B2219" } },
+    { external_code: "opt_sand", slug: "sand", value: { ru: "Песочный", en: "Песочный" }, param: "sand", meta: { hex: "#A07855" } },
+    { external_code: "opt_bronze", slug: "bronze", value: { ru: "Бронза", en: "Бронза" }, param: "bronze", meta: { hex: "#8B5A2B" } },
+    { external_code: "opt_beige", slug: "beige", value: { ru: "Бежевый", en: "Бежевый" }, param: "beige", meta: { hex: "#C4A77D" } },
+    { external_code: "opt_anthracite", slug: "anthracite", value: { ru: "Антрацит", en: "Антрацит" }, param: "anthracite", meta: { hex: "#2D3748" } },
+    { external_code: "opt_terracotta", slug: "terracotta", value: { ru: "Терракот", en: "Терракот" }, param: "terracotta", meta: { hex: "#8C3B2B" } },
+    { external_code: "opt_teak", slug: "teak", value: { ru: "Тик", en: "Тик" }, param: "teak", meta: { hex: "#B57C48" } }
   ];
 
   usedColorsMap.forEach((info, slug) => {
@@ -492,6 +633,38 @@ function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
       options: []
     },
     {
+      external_code: "attr_height_mm",
+      code: "height_mm",
+      type: "numeric",
+      name: { ru: "Высота, мм", en: "Height, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_height_min",
+      code: "height_min",
+      type: "numeric",
+      name: { ru: "Мин. высота регулировки, мм", en: "Min Height, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_height_max",
+      code: "height_max",
+      type: "numeric",
+      name: { ru: "Макс. высота регулировки, мм", en: "Max Height, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_max_load_kg",
+      code: "max_load_kg",
+      type: "numeric",
+      name: { ru: "Несущая способность, кг", en: "Max Load, kg" },
+      is_multiple: false,
+      options: []
+    },
+    {
       external_code: "0ae4e30b-a75c-11f0-0a80-15e400210259",
       code: "product_calc_category",
       type: "dictionary",
@@ -519,7 +692,7 @@ function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
 }
 
 /**
- * Определение пайплайна pl_terrace в строгом соответствии с отраслевой схемой калькулятора
+ * Определение пайплайна pl_terrace
  */
 function getTerracePipelineDefinition() {
   return {
@@ -527,8 +700,8 @@ function getTerracePipelineDefinition() {
     code: "pl_terrace",
     slug: "terrace",
     name: {
-      ru: "Конфигуратор террасного настила (ДПК) — Greendecks",
-      en: "Terrace Decking Configurator — Greendecks"
+      ru: "Конфигуратор террасного настила (ДПК) — OliverDeck",
+      en: "Terrace Decking Configurator — OliverDeck"
     },
     is_active: true,
     sort_order: 10,
@@ -603,7 +776,7 @@ function getTerracePipelineDefinition() {
 }
 
 /**
- * Определение пайплайна pl_joist (подсистема и лаги)
+ * Определение пайплайна pl_joist
  */
 function getJoistPipelineDefinition() {
   return {
@@ -632,9 +805,10 @@ function getJoistPipelineDefinition() {
 }
 
 /**
- * Гарантированное внедрение системных саморезов по умолчанию для работы калькулятора
+ * Гарантированное внедрение системных складских позиций для подсистемы основания и крепежа
  */
-function ensureDefaultFasteners(productsMap) {
+function ensureDefaultSystemItems(productsMap) {
+  // 1. Саморезы для лаг 5*120
   if (!productsMap.has('prod_00124')) {
     productsMap.set('prod_00124', {
       external_code: "prod_00124",
@@ -643,22 +817,150 @@ function ensureDefaultFasteners(productsMap) {
       catalog_type: "product",
       unit_code: "pcs",
       slug: "samorez-5-120",
-      name: { ru: "Саморез 5*120", en: "Screw 5*120" },
+      name: { ru: "Саморез 5*120 (крепление лаг)", en: "Screw 5*120" },
       code: "00124",
       is_active: true,
-      eav: { brand: "opt_brand_greendecks", material: "Металл" },
+      eav: { brand: "opt_brand_oliverdeck", material: "Металл" },
       variants: [{
-        external_code: "sku_00124",
+        external_code: "00124",
         sku: "00124",
-        name: { ru: "Саморез 5*120", en: "Screw 5*120" },
+        name: { ru: "Саморез 5*120 (крепление лаг)", en: "Screw 5*120" },
         price_group_external_code: null,
         stock: 1000,
         is_default: true,
         is_manual_pricing: true,
-        cost_price: 30,
-        currency: "KZT",
+        cost_price: 35,
+        currency: "RUB",
         price: 60,
-        eav: [],
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
+
+  // 2. Винтовая свая СВС-89*2000 мм
+  if (!productsMap.has('prod_pile_89_2000')) {
+    productsMap.set('prod_pile_89_2000', {
+      external_code: "prod_pile_89_2000",
+      product_type_external_code: "type_screw_pile",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "svaya-vintovaya-svs-89-2000",
+      name: { ru: "Свая винтовая СВС-89х2000 мм", en: "Screw Pile 89x2000 mm" },
+      code: "pile_89_2000",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "Сталь", width_mm: 89, length_mm: 2000 },
+      variants: [{
+        external_code: "CBO-89-2000",
+        sku: "CBO-89-2000",
+        name: { ru: "Свая винтовая СВС-89х2000 мм", en: "Screw Pile 89x2000 mm" },
+        price_group_external_code: null,
+        stock: 500,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 1750,
+        currency: "RUB",
+        price: 2450,
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
+
+  // 3. Оголовок свайный 150*150 мм
+  if (!productsMap.has('prod_pile_cap_150')) {
+    productsMap.set('prod_pile_cap_150', {
+      external_code: "prod_pile_cap_150",
+      product_type_external_code: "type_pile_cap",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "ogolovok-svajnyj-150-150",
+      name: { ru: "Оголовок свайный усиленный 150х150 мм", en: "Pile Cap 150x150 mm" },
+      code: "pile_cap_150",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "Сталь", width_mm: 150, length_mm: 150 },
+      variants: [{
+        external_code: "OG-150-150",
+        sku: "OG-150-150",
+        name: { ru: "Оголовок свайный усиленный 150х150 мм", en: "Pile Cap 150x150 mm" },
+        price_group_external_code: null,
+        stock: 500,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 320,
+        currency: "RUB",
+        price: 450,
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
+
+  // 4. ЦПС М-300 мешок 25 кг
+  if (!productsMap.has('prod_cps_m300')) {
+    productsMap.set('prod_cps_m300', {
+      external_code: "prod_cps_m300",
+      product_type_external_code: "type_fasteners",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "peskobeton-cps-m300-25kg",
+      name: { ru: "Пескобетон ЦПС М-300 (мешок 25 кг)", en: "Dry Mix M-300 (25 kg)" },
+      code: "cps_m300_25kg",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "ЦПС" },
+      variants: [{
+        external_code: "CPS-M300-25",
+        sku: "CPS-M300-25",
+        name: { ru: "Пескобетон ЦПС М-300 (мешок 25 кг)", en: "Dry Mix M-300 (25 kg)" },
+        price_group_external_code: null,
+        stock: 1000,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 230,
+        currency: "RUB",
+        price: 320,
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
+
+  // 5. Арматура рифленая d10 мм (чистый тип type_rebar)
+  if (!productsMap.has('prod_rebar_d10')) {
+    productsMap.set('prod_rebar_d10', {
+      external_code: "prod_rebar_d10",
+      product_type_external_code: "type_rebar",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "armatura-riflenaya-a500c-d10",
+      name: { ru: "Арматура рифленая А500С d10 мм (пруток)", en: "Rebar A500C d10 mm" },
+      code: "rebar_d10",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "Сталь", width_mm: 10, thickness_mm: 10, length_mm: 6000 },
+      variants: [{
+        external_code: "REBAR-D10",
+        sku: "REBAR-D10",
+        name: { ru: "Арматура рифленая А500С d10 мм", en: "Rebar A500C d10 mm" },
+        price_group_external_code: null,
+        stock: 500,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 45,
+        currency: "RUB",
+        price: 65,
+        eav: {},
         is_active: true
       }],
       preview_picture: null,

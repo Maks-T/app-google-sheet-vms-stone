@@ -1,51 +1,48 @@
 /**
- * GreenDecksParser.js — Модуль парсинга страниц товаров Bitrix24 магазина GreenDecks (greendecks.kz)
- * Поддерживает точный разбор всех офферов Битрикса и привязку уникальных полноразмерных фото под каждый цвет.
+ * GreenDecksParser.js (OliverDeckParser) — Универсальный парсер Shop2 CMS магазина OliverDeck (oliverdeck.ru)
+ * Гарантированное извлечение габаритов (3D/2D), диапазонов высот опор и цен в RUB.
  */
 
 /**
- * Главная точка разбора HTML страницы товара GreenDecks
- *
- * @param {string} html Сырой HTML-код страницы
- * @param {string} url URL-адрес страницы
- * @param {string} defaultType Тип товара (terraceBoard, stepBoard, joist, brackets и др.)
- * @returns {object} Структурированные данные о товаре и его торговых предложениях
+ * Главная точка разбора HTML страницы товара OliverDeck
  */
 function parseGreenDecksProductPage(html, url, defaultType) {
   const cleanUrl = cleanProductUrl(url);
 
-  // 1. Изолируем карточку товара от сопутствующих товаров
-  const mainHtml = isolateMainProductHtml(html);
+  const name = extractOliverDeckTitle(html, cleanUrl);
+  const type = defaultType || detectProductTypeFromUrlOrTitle(cleanUrl, name);
+  const dims = extractOliverDeckDimensions(html, name, cleanUrl, type);
+  const material = extractOliverDeckMaterial(html, name, type);
+  const brand = detectOliverDeckBrand(html, name, cleanUrl);
+  const price = extractOliverDeckPrice(html, dims);
+  const mainImage = extractOliverDeckMainImage(html);
 
-  const name = extractGreenDecksTitle(mainHtml, cleanUrl);
-  const dims = extractGreenDecksDimensions(mainHtml, name, cleanUrl);
-  const material = extractGreenDecksMaterial(mainHtml, name);
-  const brand = detectGreenDecksBrand(mainHtml, name, cleanUrl);
-  const price = extractGreenDecksPrice(mainHtml);
-
-  // 2. Извлекаем главное фото из слайдера
-  const mainImage = extractGreenDecksMainSliderImage(mainHtml);
-
-  // 3. Извлекаем торговые предложения (SKU) с ТОЧНОЙ привязкой уникальных фото под каждый цвет
-  const colorVariants = extractGreenDecksOffers(mainHtml, html, name, cleanUrl, mainImage, price);
+  // Извлекаем модификации по цветам из .shop2-color-ext-list
+  const variants = extractOliverDeckOffers(html, name, cleanUrl, mainImage, price, dims);
 
   return {
     name: name,
     url: cleanUrl,
-    type: defaultType || 'terraceBoard',
+    type: type,
     brand: brand,
     material: material,
     length_mm: dims.length,
     width_mm: dims.width,
     thickness_mm: dims.thickness,
+    height_mm: dims.height_mm || dims.thickness,
+    height_min: dims.height_min || null,
+    height_max: dims.height_max || null,
+    max_load_kg: dims.max_load_kg || null,
     price_retail: price,
     main_image: mainImage,
-    variants: colorVariants
+    variants: variants
   };
 }
 
+const parseOliverDeckProductPage = parseGreenDecksProductPage;
+
 /**
- * Очистка URL от рекламных меток (?srsltid=...), параметров языка и корзины
+ * 1. Очистка URL
  */
 function cleanProductUrl(url) {
   if (!url) return '';
@@ -53,57 +50,47 @@ function cleanProductUrl(url) {
 }
 
 /**
- * Изоляция HTML-кода карточки товара от блоков кросс-сейла и подвала
+ * 2. Извлечение названия товара
  */
-function isolateMainProductHtml(html) {
-  if (!html) return '';
+function extractOliverDeckTitle(html, url) {
+  const nameMatch = /<div[^>]*class=["'][^"']*product_name[^"']*["'][^>]*>([\s\S]*?)<\/div>/i.exec(html)
+    || /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(html);
 
-  const cutoffRegex = /<h[1-6][^>]*>\s*С этим товаром покупают[\s\S]*$/i;
-  let isolated = html.replace(cutoffRegex, '');
-
-  const blockCatalogIdx = isolated.indexOf('block-store-catalog-list');
-  if (blockCatalogIdx !== -1) {
-    isolated = isolated.substring(0, blockCatalogIdx);
+  if (nameMatch) {
+    return cleanHtmlText(nameMatch[1]);
   }
 
-  const elementStartIdx = isolated.indexOf('bx-catalog-element');
-  if (elementStartIdx !== -1) {
-    isolated = isolated.substring(elementStartIdx);
-  }
-
-  return isolated;
+  const cleanSlug = url.replace(/\/+$/, '').split('/').pop();
+  return cleanSlug.replace(/[-_]+/g, ' ');
 }
 
 /**
- * 1. Извлечение названия товара из <h1>
+ * 3. Извлечение розничной цены (RUB) за штуку
  */
-function extractGreenDecksTitle(mainHtml, url) {
-  const h1Match = /<h1[^>]*>([\s\S]*?)<\/h1>/i.exec(mainHtml);
-  if (h1Match) {
-    return h1Match[1]
-      .replace(/<[^>]+>/g, '')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-  const cleanSlug = url.replace(/\/$/, '').split('/').pop();
-  return cleanSlug.replace(/_/g, ' ');
-}
+function extractOliverDeckPrice(html, dims) {
+  // А. Цена за погонный метр -> умножаем на длину доски в метрах
+  const pogonMatch = /<span>([\d\s]+)<\/span>[^<]*<span[^>]*>[^<]*<\/span>\s*\/\s*пог/i.exec(html)
+    || /([\d\s]+)\s*(?:₽|руб)?\s*\/\s*пог/i.exec(html);
 
-/**
- * 2. Извлечение розничной цены в тенге (KZT)
- */
-function extractGreenDecksPrice(mainHtml) {
-  const metaPriceMatch = /<meta[^>]+itemprop=["']price["'][^>]+content=["'](\d+[\.\d]*)["']/i.exec(mainHtml);
-  if (metaPriceMatch) {
-    const val = parseFloat(metaPriceMatch[1]);
-    if (!isNaN(val) && val > 0) return val;
+  if (pogonMatch) {
+    const pricePogM = parseInt(pogonMatch[1].replace(/[^\d]/g, ''), 10);
+    if (!isNaN(pricePogM) && pricePogM > 0) {
+      const len = (dims && dims.length && dims.length >= 1000) ? dims.length : 3000;
+      return Math.round(pricePogM * (len / 1000));
+    }
   }
 
-  const classPriceMatch = /class=["'][^"']*product-item-detail-price-current[^"']*["'][^>]*>([\s\S]*?)<\/div>/i.exec(mainHtml);
-  if (classPriceMatch) {
-    const digits = classPriceMatch[1].replace(/&nbsp;/g, '').replace(/[^\d]/g, '');
-    const val = parseInt(digits, 10);
+  // Б. Мета-цена schema.org
+  const metaMatch = /<meta[^>]+itemprop=["']price["'][^>]+content=["'](\d+[\.\d]*)["']/i.exec(html);
+  if (metaMatch) {
+    const val = parseFloat(metaMatch[1]);
+    if (!isNaN(val) && val > 0) return Math.round(val);
+  }
+
+  // В. Блок цены .price-current strong
+  const strongMatch = /class=["'][^"']*price-current[^"']*["'][^>]*>[\s\S]*?<strong>([\d\s]+)<\/strong>/i.exec(html);
+  if (strongMatch) {
+    const val = parseInt(strongMatch[1].replace(/[^\d]/g, ''), 10);
     if (!isNaN(val) && val > 0) return val;
   }
 
@@ -111,193 +98,290 @@ function extractGreenDecksPrice(mainHtml) {
 }
 
 /**
- * 3. Извлечение габаритов (ширина, толщина, длина)
+ * 4. Бронебойное извлечение габаритов с нормализацией символов x/х/×
  */
-function extractGreenDecksDimensions(mainHtml, title, url) {
-  const result = { width: null, thickness: null, length: null };
-  const combined = (title + ' ' + url + ' ' + mainHtml.substring(0, 8000)).toLowerCase();
+function extractOliverDeckDimensions(html, title, url, type) {
+  const result = {
+    length: null,
+    width: null,
+    thickness: null,
+    height_mm: null,
+    height_min: null,
+    height_max: null,
+    max_load_kg: null
+  };
 
-  const dimRowMatch = /<tr[^>]*>[\s\S]*?<td[^>]*>[\s\S]*?(?:размер|габарит)[\s\S]*?<\/td>[\s\S]*?<td[^>]*>([\s\S]*?)<\/td>[\s\S]*?<\/tr>/i.exec(mainHtml);
-  if (dimRowMatch) {
-    const rawDimText = dimRowMatch[1].replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').trim();
-    parseDimensionString(rawDimText, result);
-  }
+  const titleAndUrl = (title + ' ' + url).toLowerCase();
 
-  if (!result.width || !result.thickness) {
-    const normalized = (title + ' ' + url)
-      .replace(/(\d+)kh(\d+)/gi, '$1x$2')
-      .replace(/(\d+)mm[_-](\d+)mm/gi, '$1x$2');
+  // Сбор всех возможных источников строки с размером
+  const candidateTexts = [];
 
-    parseDimensionString(normalized, result);
-  }
-
-  if (!result.length) {
-    const lengthMatch = /(?:3000|4000|3600|3010|2440|2200|2900)\s*мм/i.exec(combined)
-      || /(\d{4})\s*(?:мм|mm)/i.exec(combined);
-    if (lengthMatch) {
-      result.length = parseInt(lengthMatch[1] || lengthMatch[0], 10);
-    } else {
-      result.length = 2900;
+  // 1. Извлечение текста из любого <div class="option_body">, содержащего цифры
+  const optionBodyRegex = /<div[^>]*class=["'][^"']*option_body[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi;
+  let obMatch;
+  while ((obMatch = optionBodyRegex.exec(html)) !== null) {
+    const textInside = cleanHtmlText(obMatch[1]);
+    // Исключаем контейнеры цветов (в них есть li)
+    if (textInside && /\d/.test(textInside) && !obMatch[1].includes('<li')) {
+      candidateTexts.push(textInside);
     }
+  }
+
+  // 2. Извлечение строки размера из JSON shop2.init({"productRefs": ... "razmer": ...})
+  const razmerJsonMatch = /"razmer"\s*:\s*\{\s*"([^"]+)"/i.exec(html);
+  if (razmerJsonMatch) {
+    candidateTexts.push(decodeUnicodeEscapes(razmerJsonMatch[1]));
+  }
+
+  // 3. Извлечение из характеристик (#tabs-16, #tabs-17)
+  const charMatch = /(?:размер|габарит|диапазон\s*высот)[^:<]*:\s*([^<\n]+)/i.exec(html);
+  if (charMatch) {
+    candidateTexts.push(cleanHtmlText(charMatch[1]));
+  }
+
+  // 4. Название и URL товара
+  candidateTexts.push(title);
+  candidateTexts.push(url);
+
+  // Объединяем и нормализуем все разделители в стандартный латинский 'x'
+  const normalizedRaw = candidateTexts.join(' | ');
+  const normalized = normalizeDimensionString(normalizedRaw);
+
+  // -------------------------------------------------------------
+  // А. РЕГУЛИРУЕМЫЕ ОПОРЫ (СТРОГО исключая лаги!)
+  // -------------------------------------------------------------
+  const isOpornLaga = titleAndUrl.includes('опорная') || titleAndUrl.includes('опорн') || titleAndUrl.includes('opornaya') || titleAndUrl.includes('laga') || titleAndUrl.includes('лаг');
+  const isPedestal = (type === 'adjustable_pedestal')
+    || (titleAndUrl.includes('опора') && !isOpornLaga)
+    || (titleAndUrl.includes('opora') && !isOpornLaga)
+    || (titleAndUrl.includes('level') && !isOpornLaga && !titleAndUrl.includes('frame') && !titleAndUrl.includes('flat') && !titleAndUrl.includes('lite'));
+
+  if (isPedestal) {
+    const rangeMatch = /(\d{2,3})\s*-\s*(\d{2,3})/i.exec(normalized);
+    if (rangeMatch) {
+      const h1 = parseInt(rangeMatch[1], 10);
+      const h2 = parseInt(rangeMatch[2], 10);
+      result.height_min = Math.min(h1, h2);
+      result.height_max = Math.max(h1, h2);
+      result.length = result.height_max;
+      result.width = 200;
+      result.thickness = result.height_min;
+      result.height_mm = result.height_max;
+    } else if (titleAndUrl.includes('level low') || normalized.includes('12')) {
+      result.height_min = 12;
+      result.height_max = 12;
+      result.thickness = 12;
+      result.height_mm = 12;
+      result.length = 12;
+      result.width = 150;
+    }
+
+    const loadMatch = /(?:несущая\s*мощность|нагрузк[а-я]|load)[:\s]*(\d{3,4})\s*кг/i.exec(html)
+      || /(\d{3,4})\s*кг/i.exec(normalized);
+    result.max_load_kg = loadMatch ? parseInt(loadMatch[1], 10) : 1000;
+
+    return result;
+  }
+
+  // -------------------------------------------------------------
+  // Б. ПРОФИЛЬНЫЕ ТРУБЫ И СИЛОВОЙ КАРКАС (80x80x3, 40x40x2, 40x20x2, 60x40x2)
+  // -------------------------------------------------------------
+  if (type === 'foundation_beam' || titleAndUrl.includes('труба') || titleAndUrl.includes('truba')) {
+    const pipeMatch = /(\d{2,3})\s*x\s*(\d{2,3})\s*(?:x\s*(\d{1,2}))?/i.exec(normalized);
+    if (pipeMatch) {
+      const d1 = parseInt(pipeMatch[1], 10);
+      const d2 = parseInt(pipeMatch[2], 10);
+      result.width = Math.max(d1, d2);
+      result.thickness = Math.min(d1, d2);
+      result.height_mm = result.thickness;
+      result.length = 6000;
+      return result;
+    }
+  }
+
+  // -------------------------------------------------------------
+  // В. СТАНДАРТНЫЙ 3D ГАБАРИТ (толщина x ширина x длина):
+  // 15x40x3000, 11x145x3000, 22x345x3000, 25x140x3000, 24x147x3000
+  // -------------------------------------------------------------
+  const match3D = /(\d{1,3})\s*x\s*(\d{2,4})\s*x\s*(\d{3,5})/i.exec(normalized);
+  if (match3D) {
+    const n1 = parseInt(match3D[1], 10);
+    const n2 = parseInt(match3D[2], 10);
+    const n3 = parseInt(match3D[3], 10);
+
+    result.thickness = Math.min(n1, n2);
+    result.width = Math.max(n1, n2);
+    result.height_mm = result.thickness;
+    result.length = n3;
+    return result;
+  }
+
+  // -------------------------------------------------------------
+  // Г. 2D ГАБАРИТ (толщина x ширина): 22x345, 11x145, 15x40, 28x40
+  // -------------------------------------------------------------
+  const match2D = /(\d{1,3})\s*x\s*(\d{2,4})/i.exec(normalized);
+  if (match2D) {
+    const n1 = parseInt(match2D[1], 10);
+    const n2 = parseInt(match2D[2], 10);
+    result.thickness = Math.min(n1, n2);
+    result.width = Math.max(n1, n2);
+    result.height_mm = result.thickness;
+  }
+
+  // Длина по умолчанию для декинга
+  if (!result.length) {
+    const lengthMatch = /(?:3000|4000|6000|2900|2200|5800)\s*мм/i.exec(normalized)
+      || /(\d{4})\s*(?:мм|mm)/i.exec(normalized);
+    result.length = lengthMatch ? parseInt(lengthMatch[1] || lengthMatch[0], 10) : 3000;
   }
 
   return result;
 }
 
-function parseDimensionString(text, result) {
-  const match3D = /(\d{2,3})\s*[хxX*]\s*(\d{2,3})\s*[хxX*]\s*(\d{3,4})/i.exec(text);
-  if (match3D) {
-    const n1 = parseInt(match3D[1], 10);
-    const n2 = parseInt(match3D[2], 10);
-    const n3 = parseInt(match3D[3], 10);
-    result.width = Math.max(n1, n2);
-    result.thickness = Math.min(n1, n2);
-    result.length = n3;
-    return;
-  }
+/**
+ * Нормализатор: заменяет все типы разделителей (х/x/X/×/\u00D7/\u0445) на латинский 'x'
+ */
+function normalizeDimensionString(str) {
+  if (!str) return '';
+  return str
+    .replace(/\\u0445/gi, 'x')
+    .replace(/\\u00D7/gi, 'x')
+    .replace(/\\u2013|\\u2014/gi, '-')
+    .replace(/[хХxX*×\u00D7]/g, 'x')
+    .replace(/[–—]/g, '-')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
 
-  const match2D = /(\d{2,3})\s*[хxX*]\s*(\d{2,3})/i.exec(text);
-  if (match2D) {
-    const n1 = parseInt(match2D[1], 10);
-    const n2 = parseInt(match2D[2], 10);
-    result.width = Math.max(n1, n2);
-    result.thickness = Math.min(n1, n2);
-  }
+function decodeUnicodeEscapes(str) {
+  if (!str) return '';
+  return str.replace(/\\u([0-9a-fA-F]{4})/g, function (match, p1) {
+    return String.fromCharCode(parseInt(p1, 16));
+  });
 }
 
 /**
- * 4. Определение материала
+ * 5. Определение бренда OliverDeck
  */
-function extractGreenDecksMaterial(mainHtml, title) {
-  const text = (title + ' ' + mainHtml.substring(0, 8000)).toLowerCase();
-  if (text.includes('дпк') || text.includes('декинг') || text.includes('композит') || text.includes('wood') || text.includes('vud')) {
-    return 'ДПК (Древесно-полимерный композит)';
-  }
-  if (text.includes('алюминий') || text.includes('алюминиев')) return 'Алюминий';
-  if (text.includes('полиуретан') || text.includes('welltouch') || text.includes('pudeck')) return 'Полиуретан';
-  if (text.includes('металл') || text.includes('сталь')) return 'Металл';
-  if (text.includes('пвх')) return 'ПВХ';
+function detectOliverDeckBrand(html, title, url) {
+  const text = (title + ' ' + url + ' ' + html.substring(0, 10000)).toLowerCase();
+
+  if (text.includes('level') || text.includes('левел')) return 'opt_brand_level';
+  if (text.includes('kronex') || text.includes('кронекс')) return 'opt_brand_kronex';
+  if (text.includes('terrapol') || text.includes('террапол')) return 'opt_brand_terrapol';
+  if (text.includes('woodvex') || text.includes('вудвикс')) return 'opt_brand_woodvex';
+  if (text.includes('cm decking') || text.includes('vintage') || text.includes('robust')) return 'opt_brand_cm_decking';
+  if (text.includes('outdoor')) return 'opt_brand_outdoor';
+  if (text.includes('bruggan') || text.includes('брюган')) return 'opt_brand_bruggan';
+  if (text.includes('legro') || text.includes('легро')) return 'opt_brand_legro';
+  if (text.includes('unodeck')) return 'opt_brand_unodeck';
+
+  return 'opt_brand_oliverdeck';
+}
+
+/**
+ * 6. Определение материала
+ */
+function extractOliverDeckMaterial(html, title, type) {
+  const text = (title + ' ' + html.substring(0, 10000)).toLowerCase();
+
+  if (type === 'adjustable_pedestal') return 'Полипропилен';
+  if (type === 'foundation_beam' && (text.includes('сталь') || text.includes('труба'))) return 'Сталь';
+  if (text.includes('алюмин')) return 'Алюминий';
+  if (text.includes('мпк') || text.includes('минерально')) return 'МПК (Минерально-полимерный композит)';
+  if (text.includes('дпк') || text.includes('декинг') || text.includes('композит')) return 'ДПК (Древесно-полимерный композит)';
+  if (text.includes('металл')) return 'Металл';
+
   return 'ДПК (Древесно-полимерный композит)';
 }
 
 /**
- * 5. Определение бренда
+ * 7. Извлечение оригинального фото высокого разрешения (/d/filename.jpg)
  */
-function detectGreenDecksBrand(mainHtml, title, url) {
-  const text = (title + ' ' + url + ' ' + mainHtml.substring(0, 8000)).toLowerCase();
-
-  if (text.includes('legro')) return 'opt_brand_legro';
-  if (text.includes('easydecking') || text.includes('edecking')) return 'opt_brand_easydecking';
-  if (text.includes('welltouch')) return 'opt_brand_welltouch';
-  if (text.includes('timber essential') || text.includes('timber_essential')) return 'opt_brand_timber-essential';
-  if (text.includes('timbertech')) return 'opt_brand_3d-wood';
-  if (text.includes('pudeck')) return 'opt_brand_pudeck';
-  if (text.includes('greenwood')) return 'opt_brand_greenwood';
-  if (text.includes('aludeck')) return 'opt_brand_aludeck';
-  if (text.includes('prestige')) return 'opt_brand_prestige';
-  if (text.includes('titan')) return 'opt_brand_titan';
-  if (text.includes('polyrootd')) return 'opt_brand_polyrootd';
-  if (text.includes('master')) return 'opt_brand_master';
-  if (text.includes('robust')) return 'opt_brand_robust';
-  if (text.includes('nauticprime')) return 'opt_brand_nauticprime';
-  if (text.includes('select')) return 'opt_brand_select';
-  if (text.includes('crown')) return 'opt_brand_crown';
-  if (text.includes('hilst')) return 'opt_brand_hilst';
-  if (text.includes('holzhof') || text.includes('deckron')) return 'opt_brand_holzhof';
-  if (text.includes('brushing mix') || text.includes('brushing-mix')) return 'opt_brand_brushing-mix';
-
-  return 'opt_brand_greendecks';
-}
-
-/**
- * 6. Извлечение БОЛЬШОГО фото из главного слайдера карточки товара
- */
-function extractGreenDecksMainSliderImage(mainHtml) {
-  const sliderImgMatch = /<div[^>]*class=["'][^"']*product-item-detail-slider-image[^"']*["'][^>]*>\s*<img[^>]+src=["']([^"']+\.(?:webp|jpg|png|jpeg))["']/i.exec(mainHtml);
-  if (sliderImgMatch && isValidProductImage(sliderImgMatch[1])) {
-    return sliderImgMatch[1];
+function extractOliverDeckMainImage(html) {
+  const fullResMatch = /<a[^>]+href=["'](\/d\/[^"']+\.(?:webp|jpg|png|jpeg))["']/i.exec(html);
+  if (fullResMatch) {
+    return 'https://oliverdeck.ru' + fullResMatch[1];
   }
 
-  const itempropMatch = /<img[^>]+itemprop=["']image["'][^>]+src=["']([^"']+)["']/i.exec(mainHtml)
-    || /<img[^>]+src=["']([^"']+)["'][^>]+itemprop=["']image["']/i.exec(mainHtml);
-  if (itempropMatch && isValidProductImage(itempropMatch[1])) {
-    return itempropMatch[1];
+  const metaImgMatch = /<meta[^>]+itemprop=["']image["'][^>]+content=["']([^"']+)["']/i.exec(html);
+  if (metaImgMatch && isValidImageUrl(metaImgMatch[1])) {
+    return resolveFullImageUrl(metaImgMatch[1]);
   }
 
-  const anySliderMatch = /<div[^>]*class=["'][^"']*product-item-detail-slider-block[^"']*["'][^>]*>[\s\S]*?<img[^>]+src=["']([^"']+\.(?:webp|jpg|png|jpeg))["']/i.exec(mainHtml);
-  if (anySliderMatch && isValidProductImage(anySliderMatch[1])) {
-    return anySliderMatch[1];
-  }
-
-  const ogMatch = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(mainHtml);
-  if (ogMatch && isValidProductImage(ogMatch[1])) {
-    return ogMatch[1];
+  const sliderMatch = /<div[^>]*class=["'][^"']*product_image[^"']*["'][^>]*>[\s\S]*?<img[^>]+src=["']([^"']+)["']/i.exec(html);
+  if (sliderMatch && isValidImageUrl(sliderMatch[1])) {
+    return resolveFullImageUrl(sliderMatch[1]);
   }
 
   return '';
 }
 
-function isValidProductImage(url) {
-  if (!url) return false;
-  if (url.includes('no_photo') || url.endsWith('.svg') || url.includes('data:image')) return false;
-  return url.startsWith('http');
+function resolveFullImageUrl(rawUrl) {
+  if (!rawUrl) return '';
+  const match = /\/d\/([^"'\s?]+\.(?:webp|jpg|png|jpeg))/i.exec(rawUrl);
+  if (match) {
+    return 'https://oliverdeck.ru/d/' + match[1];
+  }
+  return rawUrl.startsWith('http') ? rawUrl : ('https://oliverdeck.ru' + rawUrl);
+}
+
+function isValidImageUrl(url) {
+  return url && !url.includes('no_photo') && !url.endsWith('.svg') && !url.includes('data:image');
 }
 
 /**
- * 7. Извлечение торговых предложений (SKU модификаций) с УНИКАЛЬНЫМИ фото каждого цвета
+ * 8. Извлечение модификаций по цветам (.shop2-color-ext-list)
  */
-function extractGreenDecksOffers(mainHtml, fullHtml, title, url, defaultMainImage, defaultPrice) {
+function extractOliverDeckOffers(html, title, url, defaultMainImage, defaultPrice, dims) {
   const variants = [];
   const seenSlugs = new Set();
 
-  // Собираем точную карту фотографий из скрипта JCCatalogElement (OFFERS)
-  const offerImagesMap = buildAdvancedOfferImageMap(fullHtml || mainHtml);
+  const listMatch = /<ul[^>]*class=["'][^"']*shop2-color-ext-list[^"']*["'][^>]*>([\s\S]*?)<\/ul>/i.exec(html);
 
-  // Сканируем цветовую палитру Битрикс внутри изолированной карточки
-  const colorBlockMatch = /<div[^>]+data-entity=["']sku-line-block["'][^>]*>[\s\S]*?Цвет[\s\S]*?<\/ul>/i.exec(mainHtml);
-  const colorAreaHtml = colorBlockMatch ? colorBlockMatch[0] : '';
-
-  if (colorAreaHtml) {
-    const colorRegex = /<li[^>]+class=["'][^"']*product-item-scu-item-color-container[^"']*["'][^>]+title=["']([^"']+)["'][^>]+data-onevalue=["']([^"']+)["'][^>]*>/gi;
+  if (listMatch) {
+    const listHtml = listMatch[1];
+    const liRegex = /<li[^>]+data-kinds=["'](\d+)["'][^>]*>([\s\S]*?)<\/li>/gi;
     let match;
-    let colorIdx = 0;
 
-    while ((match = colorRegex.exec(colorAreaHtml)) !== null) {
-      const rawColorTitle = match[1].trim();
-      const colorValueId = match[2].trim();
-      if (!rawColorTitle || rawColorTitle === '-') continue;
+    while ((match = liRegex.exec(listHtml)) !== null) {
+      const kindId = match[1].trim();
+      const liBlock = match[2];
 
-      const colorInfo = mapColorNameToOption(rawColorTitle);
+      const titleMatch = /data-title=["']([^"']+)["']/i.exec(liBlock)
+        || /alt=["']([^"']+)["']/i.exec(liBlock);
+      const rawColorName = titleMatch ? titleMatch[1].trim() : '';
 
-      // Ищем уникальное фото:
-      // 1. По ID значения цвета (data-onevalue)
-      // 2. По соответствию имени файла названию цвета (krasnyj, seryj, bezhevyj)
-      // 3. По индексу слайдера в DOM
-      // 4. Фоллбэк на главное фото
-      let colorImage = offerImagesMap.byColorId[colorValueId]
-        || offerImagesMap.bySlug[colorInfo.slug]
-        || (offerImagesMap.sliderList && offerImagesMap.sliderList[colorIdx])
-        || defaultMainImage;
+      if (!rawColorName || rawColorName === '-') continue;
+
+      const colorInfo = mapColorNameToOption(rawColorName);
+
+      const bgMatch = /style=["'][^"']*background-image:\s*url\(([^)]+)\)/i.exec(liBlock);
+      const imgMatch = /<img[^>]+src=["']([^"']+)["']/i.exec(liBlock);
+      let colorImg = bgMatch ? bgMatch[1].replace(/['"]/g, '') : (imgMatch ? imgMatch[1] : defaultMainImage);
+      colorImg = resolveFullImageUrl(colorImg);
 
       if (!seenSlugs.has(colorInfo.slug)) {
         seenSlugs.add(colorInfo.slug);
         variants.push({
-          name: rawColorTitle,
+          kind_id: kindId,
+          name: rawColorName,
           slug: colorInfo.slug,
           option_code: colorInfo.option_code,
           hex: colorInfo.hex,
-          image_url: colorImage,
+          image_url: colorImg || defaultMainImage,
           price: defaultPrice
         });
       }
-      colorIdx++;
     }
   }
 
-  // Если у товара НЕТ переключателя цветов на странице
+  // Если у товара нет выбора цветов (опоры, лаги, трубы, крепеж)
   if (variants.length === 0) {
     const detectedColor = detectColorFromTitleOrUrl(title, url);
     variants.push({
+      kind_id: null,
       name: detectedColor.name,
       slug: detectedColor.slug,
       option_code: detectedColor.option_code,
@@ -311,212 +395,67 @@ function extractGreenDecksOffers(mainHtml, fullHtml, title, url, defaultMainImag
 }
 
 /**
- * Комплексный сбор всех фото торговых предложений из JS-структур Битрикса
- */
-function buildAdvancedOfferImageMap(html) {
-  const map = {
-    byColorId: {},
-    bySlug: {},
-    sliderList: []
-  };
-
-  // 1. Извлечение всех картинок из контейнеров слайдеров (slider_cont_<OFFER_ID>)
-  const sliderContRegex = /id=["'][^"']*slider_cont_(\d+)["'][^>]*>([\s\S]*?)<\/div>\s*<\/div>/gi;
-  let sMatch;
-  while ((sMatch = sliderContRegex.exec(html)) !== null) {
-    const offerId = sMatch[1];
-    const block = sMatch[2];
-    const imgMatch = /<img[^>]+src=["']([^"']+\.(?:webp|jpg|png|jpeg))["']/i.exec(block);
-    if (imgMatch && isValidProductImage(imgMatch[1])) {
-      map.byColorId['offer_' + offerId] = imgMatch[1];
-      if (!map.sliderList.includes(imgMatch[1])) {
-        map.sliderList.push(imgMatch[1]);
-      }
-    }
-  }
-
-  // 2. Извлечение из JavaScript-конфигурации JCCatalogElement -> OFFERS
-  const offersIdx = html.indexOf("'OFFERS':");
-  if (offersIdx !== -1) {
-    const offersEndIdx = html.indexOf("'OFFER_SELECTED'", offersIdx);
-    const offersBlock = offersEndIdx !== -1
-      ? html.substring(offersIdx, offersEndIdx)
-      : html.substring(offersIdx, offersIdx + 30000);
-
-    const offerBlocks = offersBlock.split(/'ID':\s*'(\d+)'/);
-    for (let i = 1; i < offerBlocks.length; i += 2) {
-      const offerId = offerBlocks[i];
-      const chunk = offerBlocks[i + 1] || '';
-
-      // ID цвета PROP_130
-      const propMatch = /'PROP_130':\s*'(\d+)'/i.exec(chunk);
-      const colorId = propMatch ? propMatch[1] : null;
-
-      // Ищем картинку в любом из полей оффера: DETAIL_PICTURE, PREVIEW_PICTURE, SLIDER, MORE_PHOTO
-      let imgSrc = null;
-      const detailMatch = /'(?:DETAIL_PICTURE|PREVIEW_PICTURE)':\s*\{[^}]*'SRC':\s*'([^']+)'/i.exec(chunk);
-      if (detailMatch && isValidProductImage(detailMatch[1])) {
-        imgSrc = detailMatch[1];
-      } else {
-        const sliderMatch = /'SRC':\s*'([^']+\.(?:webp|jpg|png|jpeg))'/i.exec(chunk);
-        if (sliderMatch && isValidProductImage(sliderMatch[1])) {
-          imgSrc = sliderMatch[1];
-        }
-      }
-
-      if (imgSrc) {
-        if (colorId) map.byColorId[colorId] = imgSrc;
-        map.byColorId['offer_' + offerId] = imgSrc;
-
-        if (!map.sliderList.includes(imgSrc)) {
-          map.sliderList.push(imgSrc);
-        }
-
-        // Индексация по имени файла (например krasnyj-brushing-mix -> terracotta)
-        indexImageByFileName(imgSrc, map.bySlug);
-      }
-    }
-  }
-
-  // 3. Сканирование всех ссылок на картинки в HTML для надежного сопоставления по имени
-  const allImagesRegex = /https:\/\/cdn-ru\.bitrix24\.kz\/b30011694\/uf\/[^"'\s>]+\.(?:webp|jpg|png|jpeg)/gi;
-  let urlMatch;
-  while ((urlMatch = allImagesRegex.exec(html)) !== null) {
-    const imgUrl = urlMatch[0];
-    if (isValidProductImage(imgUrl)) {
-      indexImageByFileName(imgUrl, map.bySlug);
-    }
-  }
-
-  return map;
-}
-
-/**
- * Сопоставление имени графического файла с цветовым слагом (на случай, если ID свойств скрыты)
- */
-function indexImageByFileName(imgUrl, slugMap) {
-  const lower = imgUrl.toLowerCase();
-  if (lower.includes('bezhev') || lower.includes('beige')) slugMap['beige'] = imgUrl;
-  if (lower.includes('krasn') || lower.includes('red')) slugMap['terracotta'] = imgUrl;
-  if (lower.includes('pesochn') || lower.includes('sand')) slugMap['sand'] = imgUrl;
-  if (lower.includes('seryj') || lower.includes('grey') || lower.includes('gray')) slugMap['grey'] = imgUrl;
-  if (lower.includes('svetlo-korichn') || lower.includes('light_brown')) slugMap['light_brown'] = imgUrl;
-  if (lower.includes('temno-korichn') || lower.includes('dark_brown')) slugMap['dark_brown'] = imgUrl;
-  if (lower.includes('venge') || lower.includes('wenge')) slugMap['wenge'] = imgUrl;
-  if (lower.includes('shokolad') || lower.includes('chocolate')) slugMap['chocolate'] = imgUrl;
-  if (lower.includes('dub') || lower.includes('oak')) slugMap['oak'] = imgUrl;
-  if (lower.includes('antrats') || lower.includes('black')) slugMap['black_wood'] = imgUrl;
-}
-
-/**
- * Определение цвета из названия товара или URL
- */
-function detectColorFromTitleOrUrl(title, url) {
-  const text = (title + ' ' + url).toLowerCase();
-
-  if (text.includes('венге') || text.includes('wenge')) return { name: 'Венге', slug: 'wenge', hex: '#3B2219', option_code: 'opt_venge' };
-  if (text.includes('черное дерево') || text.includes('черный') || text.includes('black')) return { name: 'Черное дерево', slug: 'black_wood', hex: '#1A1A1A', option_code: 'opt_antracit' };
-  if (text.includes('антрацит') || text.includes('anthracite')) return { name: 'Антрацит', slug: 'anthracite', hex: '#2D3748', option_code: 'opt_antracit' };
-  if (text.includes('темно') && text.includes('коричнев')) return { name: 'Темно-коричневый', slug: 'dark_brown', hex: '#3B2219', option_code: 'opt_temno-koricnevyi' };
-  if (text.includes('шоколад')) return { name: 'Шоколад', slug: 'chocolate', hex: '#3B2219', option_code: 'opt_sokolad' };
-  if (text.includes('grey') || text.includes('серый')) return { name: 'Серый', slug: 'grey', hex: '#808080', option_code: 'opt_seryi' };
-  if (text.includes('graphite') || text.includes('графит')) return { name: 'Графит', slug: 'graphite', hex: '#4A5568', option_code: 'opt_grafit' };
-  if (text.includes('walnut') || text.includes('орех')) return { name: 'Грецкий Орех', slug: 'walnut', hex: '#5A3D28', option_code: 'opt_gdk_natural' };
-  if (text.includes('dub') || text.includes('дуб') || text.includes('oak')) return { name: 'Дуб', slug: 'oak', hex: '#C4A77D', option_code: 'opt_dub' };
-  if (text.includes('teak') || text.includes('тик')) return { name: 'Тик', slug: 'teak', hex: '#B57C48', option_code: 'opt_gdk_natural' };
-  if (text.includes('chestnut') || text.includes('каштан')) return { name: 'Каштан', slug: 'chestnut', hex: '#8B4513', option_code: 'opt_terrakot' };
-  if (text.includes('brown') || text.includes('коричнев')) return { name: 'Коричневый', slug: 'brown', hex: '#654321', option_code: 'opt_koricnevyi' };
-  if (text.includes('natural') || text.includes('натураль')) return { name: 'Натуральный', slug: 'natural', hex: '#C4A77D', option_code: 'opt_gdk_natural' };
-  if (text.includes('bicolor') || text.includes('двухцвет')) return { name: 'Двухцветная', slug: 'bicolor', hex: '#654321', option_code: 'opt_gdk_dvukhtsvetnaya' };
-  if (text.includes('silver') || text.includes('серебрист')) return { name: 'Серебристый', slug: 'silver', hex: '#C0C0C0', option_code: 'opt_gdk_serebristyy' };
-  if (text.includes('white') || text.includes('белый') || text.includes('пломбир')) return { name: 'Белый', slug: 'white', hex: '#F0EBE0', option_code: 'opt_belyi' };
-
-  return { name: 'Натуральный', slug: 'natural', hex: '#A07855', option_code: 'opt_gdk_natural' };
-}
-
-/**
- * 8. Сопоставление названия цвета со словарем VMS-NC
+ * 9. Сопоставление названия цвета со словарем VMS-NC
  */
 function mapColorNameToOption(colorTitle) {
   const lower = colorTitle.toLowerCase().trim();
 
-  if (lower.includes('венге') || lower.includes('wenge'))
-    return { slug: 'wenge', option_code: 'opt_venge', hex: '#3B2219' };
+  if (lower.includes('венге') || lower.includes('wenge')) return { slug: 'wenge', option_code: 'opt_venge', hex: '#3B2219' };
+  if (lower.includes('шоколад')) return { slug: 'chocolate', option_code: 'opt_chocolate', hex: '#3B2219' };
+  if (lower.includes('черн') || lower.includes('black')) return { slug: 'black_wood', option_code: 'opt_antracit', hex: '#1A1A1A' };
+  if (lower.includes('антрацит')) return { slug: 'anthracite', option_code: 'opt_anthracite', hex: '#2D3748' };
+  if (lower.includes('графит')) return { slug: 'graphite', option_code: 'opt_grafit', hex: '#4A5568' };
+  if (lower.includes('серый') || lower.includes('серая') || lower.includes('дым')) return { slug: 'grey', option_code: 'opt_seryi', hex: '#808080' };
+  if (lower.includes('орех') || lower.includes('милано')) return { slug: 'walnut', option_code: 'opt_walnut', hex: '#5A3D28' };
+  if (lower.includes('дуб') || lower.includes('севиль')) return { slug: 'oak', option_code: 'opt_dub', hex: '#C4A77D' };
+  if (lower.includes('тик')) return { slug: 'teak', option_code: 'opt_teak', hex: '#B57C48' };
+  if (lower.includes('ясен')) return { slug: 'ashwood', option_code: 'opt_gdk_natural', hex: '#CDB286' };
+  if (lower.includes('жемчуг') || lower.includes('белый') || lower.includes('бело')) return { slug: 'white', option_code: 'opt_belyi', hex: '#F0EBE0' };
+  if (lower.includes('какао') || lower.includes('коричнев') || lower.includes('кофе')) return { slug: 'brown', option_code: 'opt_koricnevyi', hex: '#654321' };
+  if (lower.includes('песоч') || lower.includes('песок')) return { slug: 'sand', option_code: 'opt_sand', hex: '#A07855' };
+  if (lower.includes('бронз')) return { slug: 'bronze', option_code: 'opt_pesocnyi', hex: '#8B5A2B' };
+  if (lower.includes('бежев') || lower.includes('оникс')) return { slug: 'beige', option_code: 'opt_beige', hex: '#C4A77D' };
+  if (lower.includes('терракот') || lower.includes('красн')) return { slug: 'terracotta', option_code: 'opt_terracotta', hex: '#8C3B2B' };
+  if (lower.includes('махагон')) return { slug: 'mahogany', option_code: 'opt_terrakot', hex: '#4A151B' };
 
-  if (lower.includes('черное дерево') || lower.includes('черный') || lower.includes('black'))
-    return { slug: 'black_wood', option_code: 'opt_antracit', hex: '#1A1A1A' };
-
-  if (lower.includes('антрацит') || lower.includes('anthracite'))
-    return { slug: 'anthracite', option_code: 'opt_antracit', hex: '#2D3748' };
-
-  if (lower.includes('темно') && lower.includes('коричнев') || lower.includes('dark brown'))
-    return { slug: 'dark_brown', option_code: 'opt_temno-koricnevyi', hex: '#3B2219' };
-
-  if (lower.includes('светло') && lower.includes('коричнев') || lower.includes('light brown'))
-    return { slug: 'light_brown', option_code: 'opt_svetlo-koricnevyi', hex: '#8B5A2B' };
-
-  if (lower.includes('шоколад') || lower.includes('chocolate'))
-    return { slug: 'chocolate', option_code: 'opt_sokolad', hex: '#3B2219' };
-
-  if (lower.includes('орех') || lower.includes('walnut'))
-    return { slug: 'walnut', option_code: 'opt_gdk_natural', hex: '#5A3D28' };
-
-  if (lower.includes('клен') || lower.includes('maple'))
-    return { slug: 'maple', option_code: 'opt_gdk_natural', hex: '#CDB286' };
-
-  if (lower.includes('тик') || lower.includes('teak'))
-    return { slug: 'teak', option_code: 'opt_gdk_natural', hex: '#B57C48' };
-
-  if (lower.includes('базальт') || lower.includes('basalt'))
-    return { slug: 'basalt', option_code: 'opt_antracit', hex: '#3E3E3E' };
-
-  if (lower.includes('серый') || lower.includes('grey') || lower.includes('gray'))
-    return { slug: 'grey', option_code: 'opt_seryi', hex: '#808080' };
-
-  if (lower.includes('графит') || lower.includes('graphite'))
-    return { slug: 'graphite', option_code: 'opt_grafit', hex: '#4A5568' };
-
-  if (lower.includes('дуб') || lower.includes('oak'))
-    return { slug: 'oak', option_code: 'opt_dub', hex: '#C4A77D' };
-
-  if (lower.includes('каштан') || lower.includes('chestnut'))
-    return { slug: 'chestnut', option_code: 'opt_terrakot', hex: '#8B4513' };
-
-  if (lower.includes('старый амбар') || lower.includes('дрифтвуд') || lower.includes('barnwood'))
-    return { slug: 'barnwood', option_code: 'opt_seryi', hex: '#696969' };
-
-  if (lower.includes('серебрист') || lower.includes('silver'))
-    return { slug: 'silver', option_code: 'opt_gdk_serebristyy', hex: '#C0C0C0' };
-
-  if (lower.includes('двухцветн') || lower.includes('dual') || lower.includes('bicolor'))
-    return { slug: 'bicolor', option_code: 'opt_gdk_dvukhtsvetnaya', hex: '#654321' };
-
-  if (lower.includes('коричнев') || lower.includes('brown'))
-    return { slug: 'brown', option_code: 'opt_koricnevyi', hex: '#654321' };
-
-  if (lower.includes('пломбир') || lower.includes('белый') || lower.includes('white'))
-    return { slug: 'white', option_code: 'opt_belyi', hex: '#F0EBE0' };
-
-  if (lower.includes('терракот') || lower.includes('terracotta') || lower.includes('красный'))
-    return { slug: 'terracotta', option_code: 'opt_terrakot', hex: '#8C3B2B' };
-
-  if (lower.includes('песочный') || lower.includes('sand') || lower.includes('бронза'))
-    return { slug: 'sand', option_code: 'opt_pesocnyi', hex: '#A07855' };
-
-  if (lower.includes('бежевый') || lower.includes('beige'))
-    return { slug: 'beige', option_code: 'opt_dub', hex: '#C4A77D' };
-
-  const translitSlug = transliterate(lower).replace(/[^a-z0-9_]/gi, '_').replace(/_+/g, '_').replace(/^_|_$/g, '').substring(0, 15);
+  const translit = transliterate(lower).replace(/[^a-z0-9_]/gi, '_').substring(0, 15);
   return {
-    slug: translitSlug || 'natural',
-    option_code: 'opt_' + (translitSlug || 'natural'),
+    slug: translit || 'natural',
+    option_code: 'opt_' + (translit || 'natural'),
     hex: '#A07855'
   };
 }
 
-/**
- * Простая транслитерация кириллицы в латиницу для исключения русских букв в слагах
- */
+function detectColorFromTitleOrUrl(title, url) {
+  const text = (title + ' ' + url).toLowerCase();
+  if (text.includes('опора') || text.includes('level') || text.includes('kronex')) {
+    return { name: 'Черный', slug: 'black_wood', hex: '#1A1A1A', option_code: 'opt_antracit' };
+  }
+  if (text.includes('труба') || text.includes('сталь') || text.includes('алюмин') || text.includes('laga')) {
+    return { name: 'Серебристый', slug: 'silver', hex: '#C0C0C0', option_code: 'opt_gdk_serebristyy' };
+  }
+  return mapColorNameToOption(title);
+}
+
+function detectProductTypeFromUrlOrTitle(url, title) {
+  const text = (url + ' ' + title).toLowerCase();
+  const isOpornLaga = text.includes('опорная') || text.includes('опорн') || text.includes('laga') || text.includes('лаг');
+
+  if ((text.includes('опора') || text.includes('level')) && !isOpornLaga) return 'adjustable_pedestal';
+  if (text.includes('труба') || text.includes('балк')) return 'foundation_beam';
+  if (text.includes('ступен')) return 'stepBoard';
+  if (text.includes('угол')) return 'decorProducts';
+  if (text.includes('забор') || text.includes('обрамлен')) return 'board';
+  if (text.includes('лага')) return 'joist';
+  if (text.includes('кляймер') || text.includes('крепеж') || text.includes('клипса')) return 'brackets';
+  return 'terraceBoard';
+}
+
+function cleanHtmlText(text) {
+  if (!text) return '';
+  return text.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 function transliterate(word) {
   const ru = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e', 'ж': 'zh',

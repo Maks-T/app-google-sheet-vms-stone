@@ -1,10 +1,24 @@
 /**
- * Utils.js — Системные константы, схемы листов и вспомогательные утилиты для GreenDecks VMS-NC
+ * Utils.js — Системные константы, схемы листов и вспомогательные утилиты для OliverDeck VMS-NC
  */
 
 const GDK_CONFIG = {
-  CURRENCY: 'KZT',
-  BASE_URL: 'https://greendecks.kz',
+  CURRENCY: 'RUB',
+  BASE_URL: 'https://oliverdeck.ru',
+
+  // Коды продуктовых семейств VMS-NC (согласно контракту oliver-deck)
+  FAMILIES: {
+    DECKING_SYSTEM: {
+      external_code: 'fam_decking_systems',
+      code: 'decking_system',
+      name: { ru: 'Террасный настил', en: 'Terrace Decking Systems' }
+    },
+    HARDWARE_ACCESSORY: {
+      external_code: 'fam_hardware_accessories',
+      code: 'hardware_accessory',
+      name: { ru: 'Комплектующие и крепеж', en: 'Hardware & Accessories' }
+    }
+  },
 
   // Точные коды типов товаров платформы VMS-NC
   PRODUCT_TYPES: {
@@ -13,7 +27,12 @@ const GDK_CONFIG = {
     'stepBoard': 'type_stepBoard',
     'brackets': 'type_brackets',
     'decorProducts': 'type_decorProducts',
-    'joist': 'type_joist'
+    'joist': 'type_joist',
+    'adjustable_pedestal': 'type_adjustable_pedestal',
+    'foundation_beam': 'type_foundation_beam',
+    'screw_pile': 'type_screw_pile',
+    'pile_cap': 'type_pile_cap',
+    'rebar': 'type_rebar'
   },
 
   // Системные UUID категорий калькулятора (из эталона import_data.json)
@@ -98,9 +117,9 @@ function setupSelfSufficientSheetLayout(sheet) {
     .build();
   sheet.getRange('A2:A2000').setDataValidation(statusRule);
 
-  // Форматирование чисел и валюты KZT
+  // Форматирование чисел и валюты RUB
   sheet.getRange('J2:L2000').setNumberFormat('#,##0');
-  sheet.getRange('M2:N2000').setNumberFormat('#,##0 "₸"');
+  sheet.getRange('M2:N2000').setNumberFormat('#,##0 "₽"');
 
   autoFitColumns(sheet, GDK_CONFIG.SHEET_COLUMNS.length);
   sheet.setColumnWidth(4, 280); // колонка name
@@ -142,12 +161,12 @@ function generateGdkExternalCode(brandCode, slugOrName, width, thickness) {
   const brandShort = (brandCode || '').replace(/^opt_brand_/, '').replace(/-/g, '_');
   let cleanSlug = (slugOrName || '')
     .toLowerCase()
-    .replace(/https?:\/\/[^\/]+\/katalog\/item\//, '')
+    .replace(/https?:\/\/[^\/]+\/(?:katalog\/item|magazin\/product|katalog)\//, '')
     .replace(/[^a-z0-9_]/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_|_$/g, '')
     .substring(0, 30);
 
   const dimsPart = (width && thickness) ? `_${width}_${thickness}` : '';
-  return `gdk_${brandShort || 'item'}_${cleanSlug}${dimsPart}`.replace(/_+/g, '_');
+  return `odk_${brandShort || 'item'}_${cleanSlug}${dimsPart}`.replace(/_+/g, '_');
 }

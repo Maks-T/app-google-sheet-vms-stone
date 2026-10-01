@@ -95,9 +95,10 @@ function parseBoardsToFullCatalog() {
 
   for (let r = 1; r < data.length; r++) {
     const rawUrl = String(data[r][urlColIdx] || data[r][4] || '').trim();
-    if (rawUrl.startsWith('http') && !seenUrls.has(rawUrl)) {
-      urlsToProcess.push(rawUrl);
-      seenUrls.add(rawUrl);
+    const cleanUrl = cleanProductUrl(rawUrl);
+    if (cleanUrl.startsWith('http') && !seenUrls.has(cleanUrl)) {
+      urlsToProcess.push(cleanUrl);
+      seenUrls.add(cleanUrl);
     }
   }
 
@@ -120,7 +121,7 @@ function parseBoardsToFullCatalog() {
         muteHttpExceptions: true,
         followRedirects: true,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'
         }
       });
@@ -131,7 +132,7 @@ function parseBoardsToFullCatalog() {
       }
 
       const html = response.getContentText();
-      const product = parseGreenDecksProductPage(html, url, 'terraceBoard');
+      const product = parseOliverDeckProductPage(html, url, 'terraceBoard');
       const baseProductCode = generateGdkExternalCode(product.brand, product.url, product.width_mm, product.thickness_mm);
 
       // Разворачиваем каждое торговое предложение (SKU / цвет) в отдельную строку

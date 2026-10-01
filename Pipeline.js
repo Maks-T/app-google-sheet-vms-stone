@@ -8,11 +8,12 @@
  */
 function getPipelineSheet(ss) {
   ss = ss || SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName('7. Связи калькулятора')
+  let sheet = ss.getSheetByName('9. Связи калькулятора')
+    || ss.getSheetByName('7. Связи калькулятора')
     || ss.getSheetByName('4. Связи калькулятора')
     || ss.getSheetByName('Связи калькулятора');
   if (!sheet) {
-    sheet = ss.insertSheet('7. Связи калькулятора');
+    sheet = ss.insertSheet('9. Связи калькулятора');
   }
   return sheet;
 }
@@ -107,7 +108,7 @@ function autoGenerateRelationsFromSheets() {
       if (sku) { defaultJoist = sku; break; }
     }
   }
-  if (!defaultJoist) defaultJoist = 'gdk_joist_al_28_37_3000';
+  if (!defaultJoist) defaultJoist = 'odk_kronex_laga_alyuminievaya_kronex_nesushchaya';
 
   // Г. Извлекаем кляймеры и саморезы
   let defaultStartClip = '';
@@ -119,18 +120,19 @@ function autoGenerateRelationsFromSheets() {
     for (let c = 0; c < clipRows.length; c++) {
       const sku = String(clipRows[c][0] || '').trim();
       const name = String(clipRows[c][1] || '').toLowerCase();
-      if (!defaultStartClip && (name.includes('старт') || sku.toLowerCase().includes('start') || sku.includes('HS7'))) {
+      if (!defaultStartClip && (name.includes('старт') || sku.toLowerCase().includes('start') || sku.includes('no7') || sku.includes('no9'))) {
         defaultStartClip = sku;
-      } else if (!defaultBaseClip && (name.includes('рядов') || sku.includes('H3D7') || name.includes('клипса') || name.includes('кляймер'))) {
+      } else if (!defaultBaseClip && (name.includes('рядов') || name.includes('промежуточ') || sku.includes('no7') || sku.includes('no9') || name.includes('клипса') || name.includes('кляймер'))) {
         defaultBaseClip = sku;
       } else if (!defaultScrew && (name.includes('саморез') || name.includes('шуруп') || sku.includes('screw') || sku.includes('124') || sku.includes('125'))) {
         defaultScrew = sku;
       }
     }
   }
-  if (!defaultStartClip) defaultStartClip = 'gdk_acc_HS7';
-  if (!defaultBaseClip) defaultBaseClip = 'gdk_acc_H3D7';
-  if (!defaultScrew) defaultScrew = '';
+
+  if (!defaultStartClip) defaultStartClip = 'odk_krepezh_startovyj_no7';
+  if (!defaultBaseClip) defaultBaseClip = 'odk_krepezh_promezhutochnyj_no7';
+  if (!defaultScrew) defaultScrew = '00124'; // Авто-подстановка системного самореза по умолчанию
 
   const pipelineRows = [];
 
@@ -203,15 +205,18 @@ function syncDropdowns() {
   const uniboards = extractSkusFromSheet(ss.getSheetByName('4. Универсальная доска (зашивка)') || ss.getSheetByName('4. Доска обрамления'));
   const joists = extractSkusFromSheet(ss.getSheetByName('5. Лаги'));
   const clipsAndFasteners = extractSkusFromSheet(ss.getSheetByName('6. Кляймеры и крепеж'));
+  const pedestals = extractSkusFromSheet(ss.getSheetByName('7. Регулируемые опоры'));
+  const beams = extractSkusFromSheet(ss.getSheetByName('8. Каркас и балки') || ss.getSheetByName('8. Балки и сваи'));
 
   const fixingScrews = [...clipsAndFasteners];
   if (!fixingScrews.includes('00124')) fixingScrews.push('00124');
   if (!fixingScrews.includes('00125')) fixingScrews.push('00125');
-  if (!fixingScrews.includes('124')) fixingScrews.push('124');
-  if (!fixingScrews.includes('125')) fixingScrews.push('125');
+
+  const allJoistsAndBeams = [...joists, ...beams];
+  if (allJoistsAndBeams.length === 0) allJoistsAndBeams.push('odk_kronex_laga_alyuminievaya_nesushchaya');
 
   setColumnValidation(pipelineSheet, 'A2:A1000', boards, true);
-  setColumnValidation(pipelineSheet, 'C2:C1000', joists, true);
+  setColumnValidation(pipelineSheet, 'C2:C1000', allJoistsAndBeams, true);
   setColumnValidation(pipelineSheet, 'D2:D1000', clipsAndFasteners, true);
   setColumnValidation(pipelineSheet, 'E2:E1000', clipsAndFasteners, true);
   setColumnValidation(pipelineSheet, 'F2:F1000', corners, true);
@@ -239,68 +244,7 @@ function exportBindingRulesJson() {
   const sheet = getPipelineSheet(ss);
   if (!sheet) return;
 
-  const data = sheet.getDataRange().getValues();
-  const rules = [];
-  const seenRuleCodes = new Set();
-
-  for (let i = 1; i < data.length; i++) {
-    const parentSku = String(data[i][0]).trim();
-    if (!parentSku) continue;
-
-    const parentName = String(data[i][1] || parentSku).substring(0, 45);
-    const joist = String(data[i][2] || '').trim();
-    const startClip = String(data[i][3] || '').trim();
-    const baseClip = String(data[i][4] || '').trim();
-    const corner = String(data[i][5] || '').trim();
-    const universalBoardsRaw = String(data[i][6] || '').trim();
-    const stepBoardsRaw = String(data[i][7] || '').trim();
-    const fixing = String(data[i][8] || '').trim();
-    const noseSize = data[i][9] || 20;
-    const holes = data[i][10] || 1;
-
-    // 1. Монтажная лага (joist -> fixing в пайплайне pl_joist)
-    if (joist) {
-      const screwSku = fixing || 'sku_00124';
-      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_joist', 'fixing', joist, screwSku, 10, `Крепление лаги (саморез): ${joist}`));
-    }
-
-    // 2. Стартовый кляймер (startClip) + параметр holes
-    if (startClip) {
-      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'startClip', parentSku, startClip, 10, `Связь startClip: ${parentName}`));
-      addHolesParam(rules, seenRuleCodes, startClip, holes);
-    }
-
-    // 3. Рядовой кляймер (baseClip) + параметр holes
-    if (baseClip) {
-      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'baseClip', parentSku, baseClip, 20, `Связь baseClip: ${parentName}`));
-      addHolesParam(rules, seenRuleCodes, baseClip, holes);
-    }
-
-    // 4. Декоративный уголок (corner) — окантовка периметра
-    if (corner) {
-      addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'corner', parentSku, corner, 30, `Связь corner: ${parentName}`, false));
-    }
-
-    // 5. Универсальные доски (universalBoards) — вертикальная зашивка цоколя
-    if (universalBoardsRaw) {
-      const items = universalBoardsRaw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
-      items.forEach(childSku => {
-        addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'universalBoards', parentSku, childSku, 40, `Связь universalBoards: ${parentName}`, false));
-        if (fixing) {
-          addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'fixing', childSku, fixing, 10, `Связь Крепление доски (саморез): ${childSku}`, true));
-        }
-      });
-    }
-
-    // 6. Ступени (stepBoards) — окантовка периметра с носиком + параметр noseSize
-    if (stepBoardsRaw) {
-      const items = stepBoardsRaw.split(/[,;\n]+/).map(s => s.trim()).filter(Boolean);
-      items.forEach(childSku => {
-        addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_terrace', 'stepBoards', parentSku, childSku, 35, `Связь stepBoards: ${parentName}`, false));
-        addNoseSizeParam(rules, seenRuleCodes, childSku, noseSize);
-      });
-    }
-  }
+  const rules = collectAllBindingRules(ss);
 
   const jsonOutput = JSON.stringify(rules, null, 2);
   const htmlOutput = HtmlService.createHtmlOutput(
@@ -309,73 +253,4 @@ function exportBindingRulesJson() {
   ).setWidth(720).setHeight(490);
 
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Экспорт массива binding_rules');
-}
-
-function addHolesParam(rules, seenRuleCodes, clipSku, holes) {
-  const holesRuleCode = `rule_holes_${clipSku}`;
-  if (!seenRuleCodes.has(holesRuleCode)) {
-    seenRuleCodes.add(holesRuleCode);
-    rules.push({
-      "pipeline_external_code": "pl_terrace",
-      "external_code": holesRuleCode,
-      "name": `Параметр Количество отверстий: ${clipSku}`,
-      "role": "holes",
-      "parent_type_key": "product_variant",
-      "parent_external_code": clipSku,
-      "child_type_key": null,
-      "child_external_code": null,
-      "conditions": null,
-      "static_meta": { "holes": String(holes) },
-      "quantity_formula": "1",
-      "is_required": true,
-      "sort_order": 10
-    });
-  }
-}
-
-function addNoseSizeParam(rules, seenRuleCodes, stepSku, noseSize) {
-  const noseRuleCode = `rule_nose_${stepSku}`;
-  if (!seenRuleCodes.has(noseRuleCode)) {
-    seenRuleCodes.add(noseRuleCode);
-    rules.push({
-      "pipeline_external_code": "pl_terrace",
-      "external_code": noseRuleCode,
-      "name": `Параметр Размер носика: ${stepSku}`,
-      "role": "noseSize",
-      "parent_type_key": "product_variant",
-      "parent_external_code": stepSku,
-      "child_type_key": null,
-      "child_external_code": null,
-      "conditions": null,
-      "static_meta": { "noseSize": String(noseSize) },
-      "quantity_formula": "1",
-      "is_required": true,
-      "sort_order": 10
-    });
-  }
-}
-
-function makeRule(pipeline, role, parentSku, childSku, sortOrder, customName, isRequired) {
-  return {
-    "pipeline_external_code": pipeline,
-    "external_code": `rule_${role}_${parentSku}_${childSku}`.replace(/[^a-zA-Z0-9_]/g, '_'),
-    "name": customName || ("Связь " + role),
-    "role": role,
-    "parent_type_key": "product_variant",
-    "parent_external_code": parentSku,
-    "child_type_key": "product_variant",
-    "child_external_code": childSku,
-    "conditions": null,
-    "static_meta": null,
-    "quantity_formula": "1",
-    "is_required": isRequired !== undefined ? isRequired : true,
-    "sort_order": sortOrder
-  };
-}
-
-function addRuleIfUnique(rulesArray, seenSet, ruleObj) {
-  if (!seenSet.has(ruleObj.external_code)) {
-    seenSet.add(ruleObj.external_code);
-    rulesArray.push(ruleObj);
-  }
 }

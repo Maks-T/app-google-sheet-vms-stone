@@ -7,7 +7,7 @@ const INBOX_CONFIG = {
   HEADERS: ['Категория (Тип товара)', 'product_url (Ссылка на страницу)', 'Статус распределения'],
   NOTES: [
     'Выберите категорию из выпадающего списка в каждой строке',
-    'Прямая ссылка на страницу товара с сайта greendecks.kz',
+    'Прямая ссылка на страницу товара с сайта oliverdeck.ru',
     'Отметка о дате, времени и целевом листе переноса'
   ],
   CATEGORY_OPTIONS: [
@@ -16,7 +16,9 @@ const INBOX_CONFIG = {
     '3. Уголки и декор (decorProducts)',
     '4. Универсальная доска (зашивка) (board)',
     '5. Лаги (joist)',
-    '6. Кляймеры и крепеж (brackets)'
+    '6. Кляймеры и крепеж (brackets)',
+    '7. Регулируемые опоры (adjustable_pedestal)',
+    '8. Каркас и балки обвязки (foundation_beam)'
   ]
 };
 
@@ -75,6 +77,10 @@ function setupInboxLinksSheet() {
         let resolvedCategory = currentCategory;
         if (targetUrl.includes('stupen_') && (currentCategory.includes('обрамлен') || !currentCategory)) {
           resolvedCategory = '2. Ступени (stepBoard)';
+        } else if ((targetUrl.includes('opora') || targetUrl.includes('level') || targetUrl.includes('pedestal')) && !targetUrl.includes('laga')) {
+          resolvedCategory = '7. Регулируемые опоры (adjustable_pedestal)';
+        } else if (targetUrl.includes('truba') || targetUrl.includes('profilnaya') || targetUrl.includes('frame')) {
+          resolvedCategory = '8. Каркас и балки обвязки (foundation_beam)';
         }
 
         const canonicalCategory = normalizeToCanonicalCategory(resolvedCategory);
@@ -147,7 +153,7 @@ function normalizeToCanonicalCategory(categoryStr) {
   const lower = String(categoryStr || '').toLowerCase().trim();
   if (!lower) return '1. Доски (terraceBoard)';
 
-  if (lower.includes('1.') || (lower.includes('доск') && !lower.includes('универсаль') && !lower.includes('обрамлен') && !lower.includes('зашив') && !lower.includes('ун-ая'))) {
+  if (lower.includes('1.') || (lower.includes('доск') && !lower.includes('универсаль') && !lower.includes('обрамлен') && !lower.includes('зашив') && !lower.includes('ун-ая') && !lower.includes('забор'))) {
     return '1. Доски (terraceBoard)';
   }
   if (lower.includes('2.') || lower.includes('ступен')) {
@@ -156,7 +162,7 @@ function normalizeToCanonicalCategory(categoryStr) {
   if (lower.includes('3.') || lower.includes('угол')) {
     return '3. Уголки и декор (decorProducts)';
   }
-  if (lower.includes('4.') || lower.includes('универсаль') || lower.includes('зашив') || lower.includes('обрамлен') || lower.includes('ун-ая')) {
+  if (lower.includes('4.') || lower.includes('универсаль') || lower.includes('зашив') || lower.includes('обрамлен') || lower.includes('ун-ая') || lower.includes('забор')) {
     return '4. Универсальная доска (зашивка) (board)';
   }
   if (lower.includes('5.') || lower.includes('лаг')) {
@@ -164,6 +170,12 @@ function normalizeToCanonicalCategory(categoryStr) {
   }
   if (lower.includes('6.') || lower.includes('кляймер') || lower.includes('кляммер') || lower.includes('клипс') || lower.includes('саморез') || lower.includes('крепеж')) {
     return '6. Кляймеры и крепеж (brackets)';
+  }
+  if (lower.includes('7.') || lower.includes('опор') || lower.includes('level') || lower.includes('pedestal')) {
+    return '7. Регулируемые опоры (adjustable_pedestal)';
+  }
+  if (lower.includes('8.') || lower.includes('каркас') || lower.includes('балк') || lower.includes('труб') || lower.includes('обвязк')) {
+    return '8. Каркас и балки обвязки (foundation_beam)';
   }
 
   return '1. Доски (terraceBoard)';
@@ -180,6 +192,8 @@ function mapInboxCategoryToTargetSheet(categoryStr) {
   if (canonical.includes('4.')) return '4. Универсальная доска (зашивка)';
   if (canonical.includes('5.')) return '5. Лаги';
   if (canonical.includes('6.')) return '6. Кляймеры и крепеж';
+  if (canonical.includes('7.')) return '7. Регулируемые опоры';
+  if (canonical.includes('8.')) return '8. Каркас и балки';
   return null;
 }
 
@@ -207,7 +221,9 @@ function distributeInboxLinksToSheets() {
     '3. Уголки и декор': ss.getSheetByName('3. Уголки и декор'),
     '4. Универсальная доска (зашивка)': ss.getSheetByName('4. Универсальная доска (зашивка)') || ss.getSheetByName('4. Доска обрамления'),
     '5. Лаги': ss.getSheetByName('5. Лаги'),
-    '6. Кляймеры и крепеж': ss.getSheetByName('6. Кляймеры и крепеж')
+    '6. Кляймеры и крепеж': ss.getSheetByName('6. Кляймеры и крепеж'),
+    '7. Регулируемые опоры': ss.getSheetByName('7. Регулируемые опоры'),
+    '8. Каркас и балки': ss.getSheetByName('8. Каркас и балки') || ss.getSheetByName('8. Балки и сваи')
   };
 
   // Кешируем уже имеющиеся ссылки, чтобы не плодить дубли
@@ -229,7 +245,9 @@ function distributeInboxLinksToSheets() {
     '3. Уголки и декор': [],
     '4. Универсальная доска (зашивка)': [],
     '5. Лаги': [],
-    '6. Кляймеры и крепеж': []
+    '6. Кляймеры и крепеж': [],
+    '7. Регулируемые опоры': [],
+    '8. Каркас и балки': []
   };
 
   let carriedCategory = '';

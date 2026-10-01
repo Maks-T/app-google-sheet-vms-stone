@@ -37,6 +37,18 @@ function getGdkComponentSheets() {
       type: 'brackets',
       productTypeExt: GDK_CONFIG.PRODUCT_TYPES.brackets,
       calcCategory: GDK_CONFIG.CALC_CATEGORIES.brackets
+    },
+    {
+      sheetName: '7. Регулируемые опоры',
+      type: 'adjustable_pedestal',
+      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.adjustable_pedestal,
+      calcCategory: null
+    },
+    {
+      sheetName: '8. Каркас и балки',
+      type: 'foundation_beam',
+      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.foundation_beam,
+      calcCategory: null
     }
   ];
 }
@@ -48,6 +60,10 @@ function findComponentSheet(ss, targetMeta) {
   let sheet = ss.getSheetByName(targetMeta.sheetName);
   if (!sheet && targetMeta.type === 'board') {
     sheet = ss.getSheetByName('4. Доска обрамления');
+    if (sheet) sheet.setName(targetMeta.sheetName);
+  }
+  if (!sheet && targetMeta.type === 'foundation_beam') {
+    sheet = ss.getSheetByName('8. Балки и сваи');
     if (sheet) sheet.setName(targetMeta.sheetName);
   }
   return sheet;
@@ -99,7 +115,7 @@ function setupAllComponentSheets() {
   });
 
   SpreadsheetApp.getActiveSpreadsheet().toast(
-    'Все листы комплектующих (Ступени, Уголки, Унив. доска, Лаги, Крепеж) успешно инициализированы.',
+    'Все листы комплектующих (Ступени, Уголки, Зашивка, Лаги, Крепеж, Опоры, Каркас) успешно инициализированы.',
     'Готово',
     3
   );
@@ -195,7 +211,7 @@ function parseSingleComponentSheet(sheet, meta) {
         muteHttpExceptions: true,
         followRedirects: true,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'
         }
       });
@@ -203,7 +219,7 @@ function parseSingleComponentSheet(sheet, meta) {
       if (response.getResponseCode() !== 200) continue;
 
       const html = response.getContentText();
-      const product = parseGreenDecksProductPage(html, url, meta.type);
+      const product = parseOliverDeckProductPage(html, url, meta.type);
       const baseCode = generateGdkExternalCode(product.brand, product.url, product.width_mm, product.thickness_mm);
 
       product.variants.forEach(v => {
@@ -211,6 +227,14 @@ function parseSingleComponentSheet(sheet, meta) {
         const variantName = v.name ? `${product.name} (${v.name})` : product.name;
         const retailPrice = v.price || product.price_retail || 0;
         const costPrice = retailPrice > 0 ? Math.round(retailPrice * 0.7) : 0;
+
+        // Для регулируемых опор сохраняем параметры H_min, H_max и Max_Load
+        const colLength = (meta.type === 'adjustable_pedestal' && product.height_min) ? product.height_min : (product.length_mm || '');
+        const colWidth = (meta.type === 'adjustable_pedestal' && product.height_max) ? product.height_max : (product.width_mm || '');
+        const colThickness = (meta.type === 'adjustable_pedestal' && product.max_load_kg) ? product.max_load_kg : (product.thickness_mm || '');
+        const logComment = (meta.type === 'adjustable_pedestal' && product.height_min)
+          ? `H: ${product.height_min}-${product.height_max} мм (${product.max_load_kg || 1000} кг)`
+          : `OK: ${new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
 
         newRows.push([
           'Готов',
@@ -222,14 +246,14 @@ function parseSingleComponentSheet(sheet, meta) {
           v.name || '',
           v.slug || '',
           v.hex || '',
-          product.length_mm || '',
-          product.width_mm || '',
-          product.thickness_mm || '',
+          colLength,
+          colWidth,
+          colThickness,
           retailPrice || '',
           costPrice || '',
           v.image_url || product.main_image || '',
           url,
-          `OK: ${new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
+          logComment
         ]);
       });
       processedCount++;
