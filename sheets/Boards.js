@@ -1,13 +1,7 @@
 /**
- * Boards.js — Модуль управления самодостаточным каталогом террасных досок (Лист 1)
+ * sheets/Boards.js — Модуль управления самодостаточным каталогом террасных досок (Лист 1)
  */
 
-/**
- * Поиск или создание листа досок (поддерживает оба имени: '1. Доски' и '1. Доски (Входные ссылки)')
- *
- * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [ss]
- * @returns {GoogleAppsScript.Spreadsheet.Sheet}
- */
 function getBoardsSheet(ss) {
   ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName('1. Доски') || ss.getSheetByName('1. Доски (Входные ссылки)');
@@ -17,14 +11,10 @@ function getBoardsSheet(ss) {
   return sheet;
 }
 
-/**
- * Инициализация разметки Листа 1 («1. Доски») с миграцией существующих ссылок
- */
 function setupBoardsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getBoardsSheet(ss);
 
-  // 1. Проверяем, есть ли старые ссылки для сохранения
   const preservedUrls = [];
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
@@ -32,14 +22,12 @@ function setupBoardsSheet() {
     const urlColIndex = currentHeaders.indexOf('product_url');
 
     if (urlColIndex !== -1) {
-      // Ссылки уже были в колонке с заголовком product_url
       const values = sheet.getRange(2, urlColIndex + 1, lastRow - 1, 1).getValues();
       for (let i = 0; i < values.length; i++) {
         const val = String(values[i][0] || '').trim();
         if (val.startsWith('http')) preservedUrls.push(val);
       }
     } else if (sheet.getLastColumn() <= 6) {
-      // Старый формат: ссылки лежали в колонке E (5)
       const values = sheet.getRange(2, 5, lastRow - 1, 1).getValues();
       for (let i = 0; i < values.length; i++) {
         const val = String(values[i][0] || '').trim();
@@ -48,16 +36,14 @@ function setupBoardsSheet() {
     }
   }
 
-  // 2. Применяем унифицированную разметку 17 колонок
   setupSelfSufficientSheetLayout(sheet);
   sheet.setName('1. Доски');
 
-  // 3. Если были сохраненные ссылки — возвращаем их в колонку P (product_url)
   if (preservedUrls.length > 0) {
     const restoreRows = preservedUrls.map(url => {
       const row = new Array(GDK_CONFIG.SHEET_COLUMNS.length).fill('');
-      row[0] = 'В очереди'; // status
-      row[15] = url;         // product_url (колонка 16 / P)
+      row[0] = 'В очереди';
+      row[15] = url;
       return row;
     });
     sheet.getRange(2, 1, restoreRows.length, GDK_CONFIG.SHEET_COLUMNS.length).setValues(restoreRows);
@@ -71,9 +57,6 @@ function setupBoardsSheet() {
   );
 }
 
-/**
- * Сбор и полное наполнение Листа 1 товарами и торговыми предложениями (SKU) по цветам
- */
 function parseBoardsToFullCatalog() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getBoardsSheet(ss);
@@ -84,12 +67,10 @@ function parseBoardsToFullCatalog() {
     return;
   }
 
-  // Находим колонку product_url (по умолчанию колонка 16 / индекс 15)
   const headers = data[0];
   let urlColIdx = headers.indexOf('product_url');
   if (urlColIdx === -1) urlColIdx = 15;
 
-  // Собираем уникальные ссылки для обработки
   const urlsToProcess = [];
   const seenUrls = new Set();
 
@@ -103,7 +84,7 @@ function parseBoardsToFullCatalog() {
   }
 
   if (urlsToProcess.length === 0) {
-    SpreadsheetApp.getUi().alert('Не найдено корректных ссылок (начинающихся с http) в колонке product_url.');
+    SpreadsheetApp.getUi().alert('Не найдено корректных ссылок в колонке product_url.');
     return;
   }
 
@@ -135,7 +116,6 @@ function parseBoardsToFullCatalog() {
       const product = parseOliverDeckProductPage(html, url, 'terraceBoard');
       const baseProductCode = generateGdkExternalCode(product.brand, product.url, product.width_mm, product.thickness_mm);
 
-      // Разворачиваем каждое торговое предложение (SKU / цвет) в отдельную строку
       product.variants.forEach(variant => {
         const sku = variant.slug ? `${baseProductCode}_${variant.slug}` : baseProductCode;
         const variantName = variant.name ? `${product.name} (${variant.name})` : product.name;
@@ -143,23 +123,23 @@ function parseBoardsToFullCatalog() {
         const costPrice = retailPrice > 0 ? Math.round(retailPrice * 0.7) : 0;
 
         newCatalogRows.push([
-          'Готов',                          // status
-          baseProductCode,                  // product_code
-          sku,                              // sku
-          variantName,                      // name
-          product.brand,                    // brand
-          product.material,                 // material
-          variant.name || '',               // color_name
-          variant.slug || '',               // color_slug
-          variant.hex || '',                // color_hex
-          product.length_mm || '',          // length_mm
-          product.width_mm || '',           // width_mm
-          product.thickness_mm || '',       // thickness_mm
-          retailPrice || '',                // price_retail
-          costPrice || '',                  // cost_price
-          variant.image_url || product.main_image || '', // image_url
-          url,                              // product_url
-          `OK: ${new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}` // comment
+          'Готов',
+          baseProductCode,
+          sku,
+          variantName,
+          product.brand,
+          product.material,
+          variant.name || '',
+          variant.slug || '',
+          variant.hex || '',
+          product.length_mm || '',
+          product.width_mm || '',
+          product.thickness_mm || '',
+          retailPrice || '',
+          costPrice || '',
+          variant.image_url || product.main_image || '',
+          url,
+          `OK: ${new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`
         ]);
       });
 
@@ -170,7 +150,6 @@ function parseBoardsToFullCatalog() {
     }
   }
 
-  // Перезаписываем данные на листе, сохраняя шапку
   if (newCatalogRows.length > 0) {
     const lastRow = Math.max(sheet.getLastRow(), 2);
     sheet.getRange(2, 1, lastRow - 1, GDK_CONFIG.SHEET_COLUMNS.length).clearContent();

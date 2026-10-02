@@ -1,5 +1,5 @@
 /**
- * Inbox.js — Модуль единого накопителя ссылок и их автоматического распределения по листам категорий
+ * sheets/Inbox.js — Модуль единого накопителя ссылок и их распределения по категориям
  */
 
 const INBOX_CONFIG = {
@@ -22,12 +22,6 @@ const INBOX_CONFIG = {
   ]
 };
 
-/**
- * Получение листа входящих ссылок (поддерживает оба имени: 'Входные ссылки' и 'отдельный лист')
- *
- * @param {GoogleAppsScript.Spreadsheet.Spreadsheet} [ss]
- * @returns {GoogleAppsScript.Spreadsheet.Sheet}
- */
 function getInboxSheet(ss) {
   ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(INBOX_CONFIG.CANONICAL_SHEET_NAME)
@@ -39,14 +33,10 @@ function getInboxSheet(ss) {
   return sheet;
 }
 
-/**
- * Инициализация разметки листа «Входные ссылки» с умным наследованием категорий
- */
 function setupInboxLinksSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getInboxSheet(ss);
 
-  // 1. Считываем текущие ссылки с поддержкой группировки (как на скриншоте)
   const preservedItems = [];
   const lastRow = sheet.getLastRow();
 
@@ -58,12 +48,10 @@ function setupInboxLinksSheet() {
       const colA = String(rawData[r][0] || '').trim();
       const colB = String(rawData[r][1] || '').trim();
 
-      // Если в колонке A указана категория группы (например "Уголок", "Лаги")
       if (colA && !colA.startsWith('http') && !colA.toLowerCase().includes('категория')) {
         currentCategory = colA;
       }
 
-      // Ищем ссылку в колонке B (или в колонке A, если вставили без категории)
       let targetUrl = '';
       if (colB.startsWith('http')) {
         targetUrl = colB;
@@ -73,7 +61,6 @@ function setupInboxLinksSheet() {
 
       if (targetUrl) {
         const cleanUrl = cleanProductUrl(targetUrl);
-        // Умное сопоставление категории с учетом названия ссылки
         let resolvedCategory = currentCategory;
         if (targetUrl.includes('stupen_') && (currentCategory.includes('обрамлен') || !currentCategory)) {
           resolvedCategory = '2. Ступени (stepBoard)';
@@ -94,17 +81,14 @@ function setupInboxLinksSheet() {
     }
   }
 
-  // 2. Очищаем лист и переименовываем в каноническое имя
   sheet.clear();
   sheet.setName(INBOX_CONFIG.CANONICAL_SHEET_NAME);
 
-  // Перемещаем лист на первое место слева
   try {
     sheet.activate();
     ss.moveActiveSheet(1);
   } catch (e) {}
 
-  // 3. Форматируем шапку
   const range = sheet.getRange(1, 1, 1, INBOX_CONFIG.HEADERS.length);
   range.setValues([INBOX_CONFIG.HEADERS]);
   range.setBackground('#1E293B');
@@ -120,35 +104,29 @@ function setupInboxLinksSheet() {
   sheet.setRowHeight(1, 32);
   sheet.setFrozenRows(1);
 
-  // 4. Настраиваем селект (выпадающий список) на колонку A для всех строк
   const catRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(INBOX_CONFIG.CATEGORY_OPTIONS, true)
     .setAllowInvalid(true)
     .build();
   sheet.getRange('A2:A2000').setDataValidation(catRule);
 
-  // 5. Записываем структурированные данные со всеми категориями в каждой строке
   if (preservedItems.length > 0) {
     const rowsToWrite = preservedItems.map(item => [item.category, item.url, item.status]);
     sheet.getRange(2, 1, rowsToWrite.length, 3).setValues(rowsToWrite);
   }
 
-  // 6. Настраиваем ширину колонок
-  sheet.setColumnWidth(1, 310); // Выпадающий список категории
-  sheet.setColumnWidth(2, 600); // URL
-  sheet.setColumnWidth(3, 240); // Статус
+  sheet.setColumnWidth(1, 310);
+  sheet.setColumnWidth(2, 600);
+  sheet.setColumnWidth(3, 240);
 
   ss.setActiveSheet(sheet);
   SpreadsheetApp.getActiveSpreadsheet().toast(
-    `Лист "Входные ссылки" оформлен. Все строки получили селект категории. Сохранено: ${preservedItems.length} ссылок.`,
+    `Лист "Входные ссылки" оформлен. Сохранено: ${preservedItems.length} ссылок.`,
     'Готово',
     4
   );
 }
 
-/**
- * Приведение произвольного текста категории к единому значению выпадающего списка
- */
 function normalizeToCanonicalCategory(categoryStr) {
   const lower = String(categoryStr || '').toLowerCase().trim();
   if (!lower) return '1. Доски (terraceBoard)';
@@ -181,9 +159,6 @@ function normalizeToCanonicalCategory(categoryStr) {
   return '1. Доски (terraceBoard)';
 }
 
-/**
- * Интеллектуальное сопоставление названия категории из ячейки с целевым рабочим листом
- */
 function mapInboxCategoryToTargetSheet(categoryStr) {
   const canonical = normalizeToCanonicalCategory(categoryStr);
   if (canonical.includes('1.')) return '1. Доски';
@@ -197,9 +172,6 @@ function mapInboxCategoryToTargetSheet(categoryStr) {
   return null;
 }
 
-/**
- * Главная команда распределения ссылок из мастер-листа по листам категорий
- */
 function distributeInboxLinksToSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const inboxSheet = getInboxSheet(ss);
@@ -214,7 +186,6 @@ function distributeInboxLinksToSheets() {
   let totalAdded = 0;
   let skippedDuplicates = 0;
 
-  // Рабочие листы
   const targetSheetsMap = {
     '1. Доски': getBoardsSheet(ss),
     '2. Ступени': ss.getSheetByName('2. Ступени'),
@@ -226,7 +197,6 @@ function distributeInboxLinksToSheets() {
     '8. Каркас и балки': ss.getSheetByName('8. Каркас и балки') || ss.getSheetByName('8. Балки и сваи')
   };
 
-  // Кешируем уже имеющиеся ссылки, чтобы не плодить дубли
   const targetExistingUrls = {};
   for (const [name, targetSheet] of Object.entries(targetSheetsMap)) {
     targetExistingUrls[name] = new Set();
@@ -275,17 +245,15 @@ function distributeInboxLinksToSheets() {
 
     totalProcessed++;
 
-    // Проверяем дубликат на целевом листе
     if (targetExistingUrls[targetSheetName].has(cleanUrl)) {
       skippedDuplicates++;
       inboxSheet.getRange(r + 1, 3).setValue(`Уже на листе "${targetSheetName}"`);
       continue;
     }
 
-    // Добавляем новую строку в очередь целевого листа
     const newTargetRow = new Array(GDK_CONFIG.SHEET_COLUMNS.length).fill('');
     newTargetRow[0] = 'В очереди';
-    newTargetRow[15] = cleanUrl; // колонка P (product_url)
+    newTargetRow[15] = cleanUrl;
     rowsToAppendBySheet[targetSheetName].push(newTargetRow);
 
     targetExistingUrls[targetSheetName].add(cleanUrl);
@@ -294,7 +262,6 @@ function distributeInboxLinksToSheets() {
     inboxSheet.getRange(r + 1, 3).setValue(`Перенесено в "${targetSheetName}" (${new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })})`);
   }
 
-  // Записываем новые строки на соответствующие листы
   for (const [sheetName, newRows] of Object.entries(rowsToAppendBySheet)) {
     if (newRows.length > 0) {
       const targetSheet = targetSheetsMap[sheetName];

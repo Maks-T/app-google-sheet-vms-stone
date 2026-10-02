@@ -1,11 +1,7 @@
 /**
- * Components.js — Модуль управления самодостаточными листами комплектующих GreenDecks
+ * sheets/Components.js — Модуль управления листами комплектующих и основания GreenDecks
  */
 
-/**
- * Получение реестра листов комплектующих и их метаданных VMS-NC
- * Лист 4 зафиксирован как "Универсальная доска" под вертикальную зашивку.
- */
 function getGdkComponentSheets() {
   return [
     {
@@ -53,9 +49,6 @@ function getGdkComponentSheets() {
   ];
 }
 
-/**
- * Поиск листа комплектующих с поддержкой старых и новых названий
- */
 function findComponentSheet(ss, targetMeta) {
   let sheet = ss.getSheetByName(targetMeta.sheetName);
   if (!sheet && targetMeta.type === 'board') {
@@ -69,9 +62,6 @@ function findComponentSheet(ss, targetMeta) {
   return sheet;
 }
 
-/**
- * Инициализация всех 5 листов комплектующих с сохранением существующих ссылок
- */
 function setupAllComponentSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const componentSheets = getGdkComponentSheets();
@@ -82,7 +72,6 @@ function setupAllComponentSheets() {
       sheet = ss.insertSheet(meta.sheetName);
     }
 
-    // Сохраняем ссылки, если они уже были внесены пользователем
     const preservedUrls = [];
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
@@ -99,10 +88,8 @@ function setupAllComponentSheets() {
       }
     }
 
-    // Накладываем схему 17 колонок
     setupSelfSufficientSheetLayout(sheet);
 
-    // Восстанавливаем очищенные ссылки без дублей в колонку P (product_url)
     if (preservedUrls.length > 0) {
       const restoreRows = preservedUrls.map(url => {
         const row = new Array(GDK_CONFIG.SHEET_COLUMNS.length).fill('');
@@ -115,15 +102,12 @@ function setupAllComponentSheets() {
   });
 
   SpreadsheetApp.getActiveSpreadsheet().toast(
-    'Все листы комплектующих (Ступени, Уголки, Зашивка, Лаги, Крепеж, Опоры, Каркас) успешно инициализированы.',
+    'Все листы комплектующих успешно инициализированы.',
     'Готово',
     3
   );
 }
 
-/**
- * Пакетный парсинг всех листов комплектующих
- */
 function parseAllComponentSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const componentSheets = getGdkComponentSheets();
@@ -146,9 +130,6 @@ function parseAllComponentSheets() {
   );
 }
 
-/**
- * Парсинг только текущего открытого листа комплектующих
- */
 function parseActiveComponentSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getActiveSheet();
@@ -171,9 +152,6 @@ function parseActiveComponentSheet() {
   );
 }
 
-/**
- * Внутренняя функция разбора конкретного листа комплектующих
- */
 function parseSingleComponentSheet(sheet, meta) {
   const data = sheet.getDataRange().getValues();
   if (data.length < 2) return { processed: 0, skus: 0 };
@@ -189,7 +167,6 @@ function parseSingleComponentSheet(sheet, meta) {
     const rawUrl = String(data[r][urlColIdx] || data[r][4] || '').trim();
     const cleanUrl = cleanProductUrl(rawUrl);
 
-    // Исключаем дублирование ссылок с UTM-хвостами и сессиями
     if (cleanUrl.startsWith('http') && !seenUrls.has(cleanUrl)) {
       urlsToProcess.push(cleanUrl);
       seenUrls.add(cleanUrl);
@@ -228,7 +205,6 @@ function parseSingleComponentSheet(sheet, meta) {
         const retailPrice = v.price || product.price_retail || 0;
         const costPrice = retailPrice > 0 ? Math.round(retailPrice * 0.7) : 0;
 
-        // Для регулируемых опор сохраняем параметры H_min, H_max и Max_Load
         const colLength = (meta.type === 'adjustable_pedestal' && product.height_min) ? product.height_min : (product.length_mm || '');
         const colWidth = (meta.type === 'adjustable_pedestal' && product.height_max) ? product.height_max : (product.width_mm || '');
         const colThickness = (meta.type === 'adjustable_pedestal' && product.max_load_kg) ? product.max_load_kg : (product.thickness_mm || '');

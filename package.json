@@ -1,13 +1,15 @@
 {
   "name": "app-google-sheet-vms-stone",
-  "version": "1.0.0",
-  "description": "",
-  "main": "Config.js",
+  "version": "1.1.0",
+  "description": "OliverDeck Catalog Parser & VMS-NC Exporter for Google Sheets",
+  "main": "config/Config.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "push": "clasp push",
+    "watch": "clasp push -w",
+    "pull": "clasp pull"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["google-apps-script", "vms-nc", "oliverdeck", "decking-calculator"],
+  "author": "Vistegra",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {

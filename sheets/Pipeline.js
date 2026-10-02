@@ -1,11 +1,7 @@
 /**
- * Pipeline.js — Генерация матрицы связей калькулятора pl_terrace и экспорт binding_rules для VMS-NC
- * Полностью соответствует отраслевой схеме WpcPipelineRole (ступень с носиком, универсальная доска с саморезом).
+ * sheets/Pipeline.js — Генерация матрицы связей калькулятора pl_terrace для VMS-NC
  */
 
-/**
- * Получение или создание листа связей калькулятора
- */
 function getPipelineSheet(ss) {
   ss = ss || SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName('9. Связи калькулятора')
@@ -18,9 +14,6 @@ function getPipelineSheet(ss) {
   return sheet;
 }
 
-/**
- * Инициализация структуры колонок листа связей калькулятора
- */
 function setupPipelineSheet(sheet) {
   sheet = sheet || getPipelineSheet();
   sheet.clear();
@@ -62,9 +55,6 @@ function setupPipelineSheet(sheet) {
   sheet.setColumnWidth(2, 280);
 }
 
-/**
- * 1. Авто-генерация матрицы связей из самодостаточных листов
- */
 function autoGenerateRelationsFromSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const boardsSheet = getBoardsSheet(ss);
@@ -80,14 +70,12 @@ function autoGenerateRelationsFromSheets() {
     return;
   }
 
-  // А. Загружаем все доски с Листа 1
   const boardData = boardsSheet.getDataRange().getValues();
   if (boardData.length < 2) {
     SpreadsheetApp.getUi().alert('Лист "1. Доски" пуст. Сначала выполните парсинг досок.');
     return;
   }
 
-  // Б. Индексируем комплектующие по бренду и цвету
   const cornersByBrandAndColor = {};
   const cornersByColor = {};
   const stepsByBrandAndColor = {};
@@ -99,7 +87,6 @@ function autoGenerateRelationsFromSheets() {
   indexComponentSheet(stepsSheet, stepsByBrandAndColor, stepsByColor);
   indexComponentSheet(universalSheet, universalByBrandAndColor, universalByColor);
 
-  // В. Извлекаем лаги по умолчанию
   let defaultJoist = '';
   if (joistsSheet && joistsSheet.getLastRow() > 1) {
     const joistRows = joistsSheet.getRange(2, 3, joistsSheet.getLastRow() - 1, 1).getValues();
@@ -110,7 +97,6 @@ function autoGenerateRelationsFromSheets() {
   }
   if (!defaultJoist) defaultJoist = 'odk_kronex_laga_alyuminievaya_kronex_nesushchaya';
 
-  // Г. Извлекаем кляймеры и саморезы
   let defaultStartClip = '';
   let defaultBaseClip = '';
   let defaultScrew = '';
@@ -132,7 +118,7 @@ function autoGenerateRelationsFromSheets() {
 
   if (!defaultStartClip) defaultStartClip = 'odk_krepezh_startovyj_no7';
   if (!defaultBaseClip) defaultBaseClip = 'odk_krepezh_promezhutochnyj_no7';
-  if (!defaultScrew) defaultScrew = '00124'; // Авто-подстановка системного самореза по умолчанию
+  if (!defaultScrew) defaultScrew = '00124';
 
   const pipelineRows = [];
 
@@ -159,8 +145,8 @@ function autoGenerateRelationsFromSheets() {
       uniboardSku,
       stepSku,
       defaultScrew,
-      20, // step_noseSize
-      1   // clip_holes
+      20,
+      1
     ]);
   }
 
@@ -192,9 +178,6 @@ function indexComponentSheet(sheet, byBrandAndColor, byColor) {
   }
 }
 
-/**
- * 2. Синхронизация выпадающих списков на листе связей
- */
 function syncDropdowns() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const pipelineSheet = getPipelineSheet(ss);
@@ -205,7 +188,6 @@ function syncDropdowns() {
   const uniboards = extractSkusFromSheet(ss.getSheetByName('4. Универсальная доска (зашивка)') || ss.getSheetByName('4. Доска обрамления'));
   const joists = extractSkusFromSheet(ss.getSheetByName('5. Лаги'));
   const clipsAndFasteners = extractSkusFromSheet(ss.getSheetByName('6. Кляймеры и крепеж'));
-  const pedestals = extractSkusFromSheet(ss.getSheetByName('7. Регулируемые опоры'));
   const beams = extractSkusFromSheet(ss.getSheetByName('8. Каркас и балки') || ss.getSheetByName('8. Балки и сваи'));
 
   const fixingScrews = [...clipsAndFasteners];
@@ -234,23 +216,4 @@ function extractSkusFromSheet(sheet) {
     if (val && !skus.includes(val)) skus.push(val);
   }
   return skus;
-}
-
-/**
- * 3. Экспорт связей калькулятора в JSON (массив binding_rules)
- */
-function exportBindingRulesJson() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = getPipelineSheet(ss);
-  if (!sheet) return;
-
-  const rules = collectAllBindingRules(ss);
-
-  const jsonOutput = JSON.stringify(rules, null, 2);
-  const htmlOutput = HtmlService.createHtmlOutput(
-    '<p style="font-family:sans-serif;margin-bottom:8px;">Сформировано правил связей: <b>' + rules.length + '</b>. Скопируйте этот массив в раздел <code>"binding_rules": [...]</code> вашего файла <b>import/import_data.json</b>:</p>' +
-    '<textarea style="width:100%;height:370px;font-family:monospace;font-size:11px;" readonly onClick="this.select();">' + jsonOutput + '</textarea>'
-  ).setWidth(720).setHeight(490);
-
-  SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Экспорт массива binding_rules');
 }
