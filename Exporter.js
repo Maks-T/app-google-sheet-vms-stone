@@ -171,6 +171,13 @@ function collectAllProductsFromSheets(ss) {
             eav.height_mm = thicknessMm;
           }
         }
+        if (typeKey === 'foundation_beam') {
+          if (widthMm) eav.profile_width_mm = widthMm;
+          if (thicknessMm) eav.profile_height_mm = thicknessMm;
+          const wallMatch = /(?:x|х)\s*(\d{1,2})(?:\s*мм|$)/i.exec(cleanBaseName);
+          eav.wall_thickness_mm = wallMatch ? parseFloat(wallMatch[1]) : (widthMm >= 80 ? 3 : 2);
+        }
+        if (typeKey === 'rebar' && widthMm) eav.diameter_mm = widthMm;
         if (sourceUrl) eav.source_url = sourceUrl;
 
         productsMap.set(productCode, {
@@ -254,6 +261,21 @@ function collectAllBindingRules(ss) {
   const data = sheet.getDataRange().getValues();
   const rules = [];
   const seenRuleCodes = new Set();
+
+  // 0. Гарантированное добавление правил крепления (pl_joist -> fixing) для ВСЕХ лаг с Листа 5
+  const joistsSheet = ss.getSheetByName('5. Лаги');
+  if (joistsSheet && joistsSheet.getLastRow() > 1) {
+    const joistData = joistsSheet.getRange(2, 3, joistsSheet.getLastRow() - 1, 1).getValues();
+    for (let j = 0; j < joistData.length; j++) {
+      const joistSku = String(joistData[j][0] || '').trim();
+      if (joistSku) {
+        addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_joist', 'fixing', joistSku, '00124', 10, `Крепление лаги (саморез): ${joistSku}`));
+      }
+    }
+  }
+
+  // 0.1 Связь винтовой сваи с оголовком (pile_head)
+  addRuleIfUnique(rules, seenRuleCodes, makeRule('pl_joist', 'pile_head', 'CBO-89-2000', 'OG-150-150', 20, 'Оголовок для сваи СВС-89 (150х150)', false));
 
   for (let i = 1; i < data.length; i++) {
     const parentSku = String(data[i][0]).trim();
@@ -516,6 +538,10 @@ function getStandardProductTypesDefinition() {
         { code: "height_mm", is_variant_only: false },
         { code: "thickness_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false },
+        { code: "profile_width_mm", is_variant_only: false },
+        { code: "profile_height_mm", is_variant_only: false },
+        { code: "wall_thickness_mm", is_variant_only: false },
+        { code: "material", is_variant_only: false },
         { code: "source_url", is_variant_only: false }
       ]
     },
@@ -526,19 +552,25 @@ function getStandardProductTypesDefinition() {
       name: { ru: "Арматура монтажная", en: "Rebar" },
       attached_attributes: [
         { code: "brand", is_variant_only: false },
+        { code: "diameter_mm", is_variant_only: false },
         { code: "width_mm", is_variant_only: false },
-        { code: "length_mm", is_variant_only: false }
+        { code: "length_mm", is_variant_only: false },
+        { code: "material", is_variant_only: false }
       ]
     },
     {
       external_code: "type_screw_pile",
-      family_external_code: "fam_hardware_accessories",
+      family_external_code: "fam_decking_systems",
       code: "screw_pile",
       name: { ru: "Винтовые сваи", en: "Screw Piles" },
       attached_attributes: [
         { code: "brand", is_variant_only: false },
-        { code: "width_mm", is_variant_only: false },
-        { code: "length_mm", is_variant_only: false }
+        { code: "diameter_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "blade_diameter_mm", is_variant_only: false },
+        { code: "wall_thickness_mm", is_variant_only: false },
+        { code: "has_head", is_variant_only: false },
+        { code: "material", is_variant_only: false }
       ]
     },
     {
@@ -587,15 +619,25 @@ function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
   });
 
   const colorOptions = [
+    { external_code: "opt_wenge", slug: "wenge", value: { ru: "Венге", en: "Wenge" }, param: "wenge", meta: { hex: "#3B2219" } },
     { external_code: "opt_venge", slug: "wenge", value: { ru: "Венге", en: "Wenge" }, param: "wenge", meta: { hex: "#3B2219" } },
+    { external_code: "opt_oak", slug: "oak", value: { ru: "Дуб", en: "Oak" }, param: "oak", meta: { hex: "#C4A77D" } },
     { external_code: "opt_dub", slug: "oak", value: { ru: "Дуб", en: "Oak" }, param: "oak", meta: { hex: "#C4A77D" } },
+    { external_code: "opt_grey", slug: "grey", value: { ru: "Серый", en: "Grey" }, param: "grey", meta: { hex: "#808080" } },
     { external_code: "opt_seryi", slug: "grey", value: { ru: "Серый", en: "Grey" }, param: "grey", meta: { hex: "#808080" } },
+    { external_code: "opt_graphite", slug: "graphite", value: { ru: "Графит", en: "Graphite" }, param: "graphite", meta: { hex: "#4A5568" } },
     { external_code: "opt_grafit", slug: "graphite", value: { ru: "Графит", en: "Graphite" }, param: "graphite", meta: { hex: "#4A5568" } },
+    { external_code: "opt_black_wood", slug: "black_wood", value: { ru: "Черное дерево", en: "Black Wood" }, param: "black_wood", meta: { hex: "#1A1A1A" } },
     { external_code: "opt_antracit", slug: "black_wood", value: { ru: "Черное дерево", en: "Black Wood" }, param: "black_wood", meta: { hex: "#1A1A1A" } },
+    { external_code: "opt_brown", slug: "brown", value: { ru: "Коричневый", en: "Brown" }, param: "brown", meta: { hex: "#654321" } },
     { external_code: "opt_koricnevyi", slug: "brown", value: { ru: "Коричневый", en: "Brown" }, param: "brown", meta: { hex: "#654321" } },
+    { external_code: "opt_dark_brown", slug: "dark_brown", value: { ru: "Темно-коричневый", en: "Dark Brown" }, param: "dark_brown", meta: { hex: "#3B2219" } },
     { external_code: "opt_temno-koricnevyi", slug: "dark_brown", value: { ru: "Темно-коричневый", en: "Dark Brown" }, param: "dark_brown", meta: { hex: "#3B2219" } },
+    { external_code: "opt_natural", slug: "natural", value: { ru: "Натураль", en: "Natural" }, param: "natural", meta: { hex: "#C4A77D" } },
     { external_code: "opt_gdk_natural", slug: "natural", value: { ru: "Натураль", en: "Natural" }, param: "natural", meta: { hex: "#C4A77D" } },
+    { external_code: "opt_silver", slug: "silver", value: { ru: "Серебристый", en: "Silver" }, param: "silver", meta: { hex: "#C0C0C0" } },
     { external_code: "opt_gdk_serebristyy", slug: "silver", value: { ru: "Серебристый", en: "Silver" }, param: "silver", meta: { hex: "#C0C0C0" } },
+    { external_code: "opt_white", slug: "white", value: { ru: "Белый", en: "White" }, param: "white", meta: { hex: "#F0EBE0" } },
     { external_code: "opt_belyi", slug: "white", value: { ru: "Белый", en: "White" }, param: "white", meta: { hex: "#F0EBE0" } },
     { external_code: "opt_chocolate", slug: "chocolate", value: { ru: "Шоколад", en: "Шоколад" }, param: "chocolate", meta: { hex: "#3B2219" } },
     { external_code: "opt_sand", slug: "sand", value: { ru: "Песочный", en: "Песочный" }, param: "sand", meta: { hex: "#A07855" } },
@@ -607,7 +649,7 @@ function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
   ];
 
   usedColorsMap.forEach((info, slug) => {
-    if (!colorOptions.some(opt => opt.slug === slug || opt.external_code === info.option_code)) {
+    if (!colorOptions.some(opt => opt.external_code === info.option_code)) {
       colorOptions.push({
         external_code: info.option_code,
         slug: slug,
@@ -680,6 +722,62 @@ function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
       code: "max_load_kg",
       type: "numeric",
       name: { ru: "Несущая способность, кг", en: "Max Load, kg" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_diameter_mm",
+      code: "diameter_mm",
+      type: "numeric",
+      name: { ru: "Диаметр, мм", en: "Diameter, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_blade_diameter_mm",
+      code: "blade_diameter_mm",
+      type: "numeric",
+      name: { ru: "Диаметр лопасти, мм", en: "Blade Diameter, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_wall_thickness_mm",
+      code: "wall_thickness_mm",
+      type: "numeric",
+      name: { ru: "Толщина стенки, мм", en: "Wall Thickness, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_profile_width_mm",
+      code: "profile_width_mm",
+      type: "numeric",
+      name: { ru: "Ширина профиля, мм", en: "Profile Width, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_profile_height_mm",
+      code: "profile_height_mm",
+      type: "numeric",
+      name: { ru: "Высота профиля, мм", en: "Profile Height, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_has_head",
+      code: "has_head",
+      type: "boolean",
+      name: { ru: "Наличие оголовка", en: "Has Head" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_material",
+      code: "material",
+      type: "string",
+      name: { ru: "Материал", en: "Material" },
       is_multiple: false,
       options: []
     },
@@ -871,7 +969,16 @@ function ensureDefaultSystemItems(productsMap) {
       name: { ru: "Свая винтовая СВС-89х2000 мм", en: "Screw Pile 89x2000 mm" },
       code: "pile_89_2000",
       is_active: true,
-      eav: { brand: "opt_brand_oliverdeck", material: "Сталь", width_mm: 89, length_mm: 2000 },
+      eav: {
+        brand: "opt_brand_oliverdeck",
+        material: "Сталь",
+        diameter_mm: 89,
+        width_mm: 89,
+        length_mm: 2000,
+        blade_diameter_mm: 250,
+        wall_thickness_mm: 3.5,
+        has_head: false
+      },
       variants: [{
         external_code: "CBO-89-2000",
         sku: "CBO-89-2000",
@@ -967,7 +1074,14 @@ function ensureDefaultSystemItems(productsMap) {
       name: { ru: "Арматура рифленая А500С d10 мм (пруток)", en: "Rebar A500C d10 mm" },
       code: "rebar_d10",
       is_active: true,
-      eav: { brand: "opt_brand_oliverdeck", material: "Сталь", width_mm: 10, thickness_mm: 10, length_mm: 6000 },
+      eav: {
+        brand: "opt_brand_oliverdeck",
+        material: "Сталь",
+        diameter_mm: 10,
+        width_mm: 10,
+        thickness_mm: 10,
+        length_mm: 6000
+      },
       variants: [{
         external_code: "REBAR-D10",
         sku: "REBAR-D10",

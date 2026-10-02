@@ -33,6 +33,9 @@ function parseGreenDecksProductPage(html, url, defaultType) {
     height_min: dims.height_min || null,
     height_max: dims.height_max || null,
     max_load_kg: dims.max_load_kg || null,
+    wall_thickness_mm: dims.wall_thickness_mm || null,
+    profile_width_mm: dims.profile_width_mm || null,
+    profile_height_mm: dims.profile_height_mm || null,
     price_retail: price,
     main_image: mainImage,
     variants: variants
@@ -108,7 +111,10 @@ function extractOliverDeckDimensions(html, title, url, type) {
     height_mm: null,
     height_min: null,
     height_max: null,
-    max_load_kg: null
+    max_load_kg: null,
+    wall_thickness_mm: null,
+    profile_width_mm: null,
+    profile_height_mm: null
   };
 
   const titleAndUrl = (title + ' ' + url).toLowerCase();
@@ -191,10 +197,14 @@ function extractOliverDeckDimensions(html, title, url, type) {
     if (pipeMatch) {
       const d1 = parseInt(pipeMatch[1], 10);
       const d2 = parseInt(pipeMatch[2], 10);
+      const wall = pipeMatch[3] ? parseInt(pipeMatch[3], 10) : (d1 >= 80 ? 3 : 2);
       result.width = Math.max(d1, d2);
       result.thickness = Math.min(d1, d2);
       result.height_mm = result.thickness;
       result.length = 6000;
+      result.profile_width_mm = result.width;
+      result.profile_height_mm = result.thickness;
+      result.wall_thickness_mm = wall;
       return result;
     }
   }
@@ -412,23 +422,23 @@ function extractOliverDeckOffers(html, title, url, defaultMainImage, defaultPric
 function mapColorNameToOption(colorTitle) {
   const lower = colorTitle.toLowerCase().trim();
 
-  if (lower.includes('венге') || lower.includes('wenge')) return { slug: 'wenge', option_code: 'opt_venge', hex: '#3B2219' };
+  if (lower.includes('венге') || lower.includes('wenge')) return { slug: 'wenge', option_code: 'opt_wenge', hex: '#3B2219' };
   if (lower.includes('шоколад')) return { slug: 'chocolate', option_code: 'opt_chocolate', hex: '#3B2219' };
-  if (lower.includes('черн') || lower.includes('black')) return { slug: 'black_wood', option_code: 'opt_antracit', hex: '#1A1A1A' };
+  if (lower.includes('черн') || lower.includes('black')) return { slug: 'black_wood', option_code: 'opt_black_wood', hex: '#1A1A1A' };
   if (lower.includes('антрацит')) return { slug: 'anthracite', option_code: 'opt_anthracite', hex: '#2D3748' };
-  if (lower.includes('графит')) return { slug: 'graphite', option_code: 'opt_grafit', hex: '#4A5568' };
-  if (lower.includes('серый') || lower.includes('серая') || lower.includes('дым')) return { slug: 'grey', option_code: 'opt_seryi', hex: '#808080' };
+  if (lower.includes('графит')) return { slug: 'graphite', option_code: 'opt_graphite', hex: '#4A5568' };
+  if (lower.includes('серый') || lower.includes('серая') || lower.includes('дым')) return { slug: 'grey', option_code: 'opt_grey', hex: '#808080' };
   if (lower.includes('орех') || lower.includes('милано')) return { slug: 'walnut', option_code: 'opt_walnut', hex: '#5A3D28' };
-  if (lower.includes('дуб') || lower.includes('севиль')) return { slug: 'oak', option_code: 'opt_dub', hex: '#C4A77D' };
+  if (lower.includes('дуб') || lower.includes('севиль')) return { slug: 'oak', option_code: 'opt_oak', hex: '#C4A77D' };
   if (lower.includes('тик')) return { slug: 'teak', option_code: 'opt_teak', hex: '#B57C48' };
-  if (lower.includes('ясен')) return { slug: 'ashwood', option_code: 'opt_gdk_natural', hex: '#CDB286' };
-  if (lower.includes('жемчуг') || lower.includes('белый') || lower.includes('бело')) return { slug: 'white', option_code: 'opt_belyi', hex: '#F0EBE0' };
-  if (lower.includes('какао') || lower.includes('коричнев') || lower.includes('кофе')) return { slug: 'brown', option_code: 'opt_koricnevyi', hex: '#654321' };
+  if (lower.includes('ясен')) return { slug: 'ashwood', option_code: 'opt_ashwood', hex: '#CDB286' };
+  if (lower.includes('жемчуг') || lower.includes('белый') || lower.includes('бело')) return { slug: 'white', option_code: 'opt_white', hex: '#F0EBE0' };
+  if (lower.includes('какао') || lower.includes('коричнев') || lower.includes('кофе')) return { slug: 'brown', option_code: 'opt_brown', hex: '#654321' };
   if (lower.includes('песоч') || lower.includes('песок')) return { slug: 'sand', option_code: 'opt_sand', hex: '#A07855' };
-  if (lower.includes('бронз')) return { slug: 'bronze', option_code: 'opt_pesocnyi', hex: '#8B5A2B' };
+  if (lower.includes('бронз')) return { slug: 'bronze', option_code: 'opt_bronze', hex: '#8B5A2B' };
   if (lower.includes('бежев') || lower.includes('оникс')) return { slug: 'beige', option_code: 'opt_beige', hex: '#C4A77D' };
   if (lower.includes('терракот') || lower.includes('красн')) return { slug: 'terracotta', option_code: 'opt_terracotta', hex: '#8C3B2B' };
-  if (lower.includes('махагон')) return { slug: 'mahogany', option_code: 'opt_terrakot', hex: '#4A151B' };
+  if (lower.includes('махагон')) return { slug: 'mahogany', option_code: 'opt_mahogany', hex: '#4A151B' };
 
   const translit = transliterate(lower).replace(/[^a-z0-9_]/gi, '_').substring(0, 15);
   return {
@@ -441,10 +451,10 @@ function mapColorNameToOption(colorTitle) {
 function detectColorFromTitleOrUrl(title, url) {
   const text = (title + ' ' + url).toLowerCase();
   if (text.includes('опора') || text.includes('level') || text.includes('kronex')) {
-    return { name: 'Черный', slug: 'black_wood', hex: '#1A1A1A', option_code: 'opt_antracit' };
+    return { name: 'Черный', slug: 'black_wood', hex: '#1A1A1A', option_code: 'opt_black_wood' };
   }
   if (text.includes('труба') || text.includes('сталь') || text.includes('алюмин') || text.includes('laga')) {
-    return { name: 'Серебристый', slug: 'silver', hex: '#C0C0C0', option_code: 'opt_gdk_serebristyy' };
+    return { name: 'Серебристый', slug: 'silver', hex: '#C0C0C0', option_code: 'opt_silver' };
   }
   return mapColorNameToOption(title);
 }
