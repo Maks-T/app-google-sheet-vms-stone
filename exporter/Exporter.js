@@ -192,8 +192,17 @@ function collectAllProductsFromSheets(ss) {
 
       const variantEav = {};
       const effectiveColorSlug = colorSlug || (['terraceBoard', 'stepBoard', 'decorProducts'].includes(typeKey) ? 'natural' : null);
-      if (effectiveColorSlug && usedColors.has(effectiveColorSlug)) {
-        variantEav.color = usedColors.get(effectiveColorSlug).option_code;
+      if (effectiveColorSlug) {
+        const cleanSlug = effectiveColorSlug.replace(/[^a-z0-9_]/g, '_');
+        variantEav.color = 'opt_' + cleanSlug;
+
+        if (!usedColors.has(cleanSlug)) {
+          usedColors.set(cleanSlug, {
+            name: colorName || cleanSlug,
+            hex: colorHex || '#808080',
+            option_code: 'opt_' + cleanSlug
+          });
+        }
       }
 
       let uniqueSku = sku;
