@@ -178,4 +178,196 @@ function ensureDefaultSystemItems(productsMap) {
       source_url: null
     });
   }
+
+  // 6. Саморезы для кронштейнов ограждения 3.5*20
+  if (!productsMap.has('prod_00127')) {
+    productsMap.set('prod_00127', {
+      external_code: "prod_00127",
+      product_type_external_code: "type_fasteners",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "samorezy-3520",
+      name: { ru: "Саморезы 3,5*20 (крепление кронштейнов)", en: "Screws 3.5*20" },
+      code: "00127",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "Металл", length_mm: 20, product_calc_category: "es6fD7XEi4GyfO6L13Ply3" },
+      variants: [{
+        external_code: "00127",
+        sku: "00127",
+        name: { ru: "Саморезы 3,5*20", en: "Screws 3.5*20" },
+        price_group_external_code: null,
+        stock: 5000,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 1.15,
+        currency: "RUB",
+        price: 3,
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
+
+  // 7. Кронштейн столба ДПК 100х100 (стакан усиленный)
+  if (!productsMap.has('prod_bracket_pillar_100')) {
+    productsMap.set('prod_bracket_pillar_100', {
+      external_code: "prod_bracket_pillar_100",
+      product_type_external_code: "type_brackets",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "kronstein-dlya-stolba-dpk-100",
+      name: { ru: "Кронштейн для столба ДПК 100х100", en: "Pillar Bracket 100x100" },
+      code: "00112",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "Сталь", width_mm: 100, length_mm: 100, product_calc_category: "7-ZHjGVRi90X2pkVocJLo1" },
+      variants: [{
+        external_code: "00112",
+        sku: "00112",
+        name: { ru: "Кронштейн для столба ДПК 100х100", en: "Pillar Bracket 100x100" },
+        price_group_external_code: null,
+        stock: 200,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 2200,
+        currency: "RUB",
+        price: 3950,
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
+
+  // 8. Крепеж перила прямой
+  if (!productsMap.has('prod_bracket_rail_direct')) {
+    productsMap.set('prod_bracket_rail_direct', {
+      external_code: "prod_bracket_rail_direct",
+      product_type_external_code: "type_brackets",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "krepezh-perila-pryamoj",
+      name: { ru: "Крепеж перила прямой", en: "Rail Bracket Direct" },
+      code: "00204",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "Металл", width_mm: 85, height_mm: 39, length_mm: 48, product_calc_category: "7-ZHjGVRi90X2pkVocJLo1" },
+      variants: [{
+        external_code: "00204",
+        sku: "00204",
+        name: { ru: "Крепеж перила прямой", en: "Rail Bracket Direct" },
+        price_group_external_code: null,
+        stock: 500,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 382,
+        currency: "RUB",
+        price: 630,
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
+
+  // 9. Крепеж для балясины пластиковый 40х40 / 45х45
+  if (!productsMap.has('prod_bracket_baluster_plastic')) {
+    productsMap.set('prod_bracket_baluster_plastic', {
+      external_code: "prod_bracket_baluster_plastic",
+      product_type_external_code: "type_brackets",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "krepezh-dlya-balyasiny-plastikovyj",
+      name: { ru: "Крепеж для балясины пластиковый", en: "Baluster Bracket Plastic" },
+      code: "00177",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "Пластик", width_mm: 40, height_mm: 30, length_mm: 40, product_calc_category: "7-ZHjGVRi90X2pkVocJLo1" },
+      variants: [{
+        external_code: "00177",
+        sku: "00177",
+        name: { ru: "Крепеж для балясины пластиковый", en: "Baluster Bracket Plastic" },
+        price_group_external_code: null,
+        stock: 2000,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 25,
+        currency: "RUB",
+        price: 42,
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
+
+  // 10. Крышка для столба 100х100
+  if (!productsMap.has('prod_cap_pillar_100')) {
+    productsMap.set('prod_cap_pillar_100', {
+      external_code: "prod_cap_pillar_100",
+      product_type_external_code: "type_accessories",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "kryshka-dlya-stolba-100-100",
+      name: { ru: "Крышка для столба 100х100 мм ДПК", en: "Pillar Cap 100x100 mm" },
+      code: "00230",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "ДПК", width_mm: 120, height_mm: 43, length_mm: 120, product_calc_category: "9SyNj-0fgsfUajCqxkAEu1" },
+      variants: [{
+        external_code: "00230",
+        sku: "00230",
+        name: { ru: "Крышка для столба 100х100 мм ДПК", en: "Pillar Cap 100x100 mm" },
+        price_group_external_code: null,
+        stock: 300,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 477,
+        currency: "RUB",
+        price: 788,
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
+
+  // 11. Юбка для столба 100х100
+  if (!productsMap.has('prod_skirt_pillar_100')) {
+    productsMap.set('prod_skirt_pillar_100', {
+      external_code: "prod_skirt_pillar_100",
+      product_type_external_code: "type_accessories",
+      category_external_code: null,
+      catalog_type: "product",
+      unit_code: "pcs",
+      slug: "yubka-dlya-stolba-100-100",
+      name: { ru: "Юбка для столба 100х100 мм ДПК", en: "Pillar Skirt 100x100 mm" },
+      code: "00367",
+      is_active: true,
+      eav: { brand: "opt_brand_oliverdeck", material: "ДПК", width_mm: 158, height_mm: 18, length_mm: 158, product_calc_category: "9SyNj-0fgsfUajCqxkAEu1" },
+      variants: [{
+        external_code: "00367",
+        sku: "00367",
+        name: { ru: "Юбка для столба 100х100 мм ДПК", en: "Pillar Skirt 100x100 mm" },
+        price_group_external_code: null,
+        stock: 300,
+        is_default: true,
+        is_manual_pricing: true,
+        cost_price: 477,
+        currency: "RUB",
+        price: 788,
+        eav: {},
+        is_active: true
+      }],
+      preview_picture: null,
+      source_url: null
+    });
+  }
 }

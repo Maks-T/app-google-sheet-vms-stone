@@ -1,0 +1,18 @@
+# Исключение служебных утилит и резервных копий мигратора
+.diff-migrator/**
+node_modules/**
+
+# Исключение систем контроля версий и IDE
+.git/**
+.idea/**
+.vscode/**
+
+# Исключение служебных файлов пакетов и дампов
+package.json
+package-lock.json
+README.md
+tree.txt
+*.txt
+
+# Обязательное сохранение манифеста
+!appsscript.json

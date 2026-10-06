@@ -45,6 +45,36 @@ function getGdkComponentSheets() {
       type: 'foundation_beam',
       productTypeExt: GDK_CONFIG.PRODUCT_TYPES.foundation_beam,
       calcCategory: null
+    },
+    {
+      sheetName: '10. Столбы',
+      type: 'pillar',
+      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.pillar,
+      calcCategory: GDK_CONFIG.CALC_CATEGORIES.pillar
+    },
+    {
+      sheetName: '11. Перила',
+      type: 'rail',
+      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.rail,
+      calcCategory: GDK_CONFIG.CALC_CATEGORIES.rail
+    },
+    {
+      sheetName: '12. Балясины',
+      type: 'baluster',
+      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.baluster,
+      calcCategory: GDK_CONFIG.CALC_CATEGORIES.baluster
+    },
+    {
+      sheetName: '13. Заборный профиль и рейка',
+      type: 'fenceProfile',
+      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.fenceProfile,
+      calcCategory: GDK_CONFIG.CALC_CATEGORIES.fenceProfile
+    },
+    {
+      sheetName: '14. Аксессуары ограждения',
+      type: 'accessories',
+      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.accessories,
+      calcCategory: GDK_CONFIG.CALC_CATEGORIES.accessories
     }
   ];
 }

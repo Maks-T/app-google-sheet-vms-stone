@@ -174,6 +174,102 @@ function getStandardProductTypesDefinition() {
         { code: "width_mm", is_variant_only: false },
         { code: "length_mm", is_variant_only: false }
       ]
+    },
+    {
+      external_code: "type_pillar",
+      family_external_code: "fam_fence_systems",
+      code: "pillar",
+      name: { ru: "Столб", en: "Pillar" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "material", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
+    },
+    {
+      external_code: "type_rail",
+      family_external_code: "fam_fence_systems",
+      code: "rail",
+      name: { ru: "Перила", en: "Railing" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "material", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
+    },
+    {
+      external_code: "type_baluster",
+      family_external_code: "fam_fence_systems",
+      code: "baluster",
+      name: { ru: "Балясина", en: "Baluster" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "material", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
+    },
+    {
+      external_code: "type_lath",
+      family_external_code: "fam_fence_systems",
+      code: "lath",
+      name: { ru: "Рейка", en: "Lath" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "material", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
+    },
+    {
+      external_code: "type_fenceProfile",
+      family_external_code: "fam_fence_systems",
+      code: "fenceProfile",
+      name: { ru: "Заборный профиль", en: "Fence Profile" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "material", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
+    },
+    {
+      external_code: "type_accessories",
+      family_external_code: "fam_hardware_accessories",
+      code: "accessories",
+      name: { ru: "Аксессуары столба (крышки, юбки)", en: "Pillar Accessories" },
+      attached_attributes: [
+        { code: "brand", is_variant_only: false },
+        { code: "material", is_variant_only: false },
+        { code: "width_mm", is_variant_only: false },
+        { code: "height_mm", is_variant_only: false },
+        { code: "length_mm", is_variant_only: false },
+        { code: "product_calc_category", is_variant_only: false },
+        { code: "source_url", is_variant_only: false },
+        { code: "color", is_variant_only: true }
+      ]
     }
   ];
 }

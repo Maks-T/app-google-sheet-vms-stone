@@ -11,7 +11,7 @@ function onOpen() {
     .addItem('1. Пересоздать и упорядочить все листы каталога', 'setupAllSheets')
     .addSeparator()
     .addItem('2. Спарсить Доски со всеми цветами и ценами (Лист 1)', 'parseBoardsToFullCatalog')
-    .addItem('3. Спарсить все Комплектующие и Основание (Листы 2–8)', 'parseAllComponentSheets')
+    .addItem('3. Спарсить все Комплектующие, Основание и Ограждения (Листы 2–14)', 'parseAllComponentSheets')
     .addItem('4. Спарсить только текущий открытый лист комплектующих', 'parseActiveComponentSheet')
     .addSeparator()
     .addItem('5. Сгенерировать матрицу связей калькулятора (Лист 9)', 'autoGenerateRelationsFromSheets')
@@ -74,7 +74,12 @@ function setupAllSheets() {
     '6. Кляймеры и крепеж',
     '7. Регулируемые опоры',
     '8. Каркас и балки',
-    '9. Связи калькулятора'
+    '9. Связи калькулятора',
+    '10. Столбы',
+    '11. Перила',
+    '12. Балясины',
+    '13. Заборный профиль и рейка',
+    '14. Аксессуары ограждения'
   ];
 
   canonicalOrder.forEach((sheetName, index) => {
@@ -116,7 +121,13 @@ function setupGuideSheet(sheet) {
     ['type_foundation_beam', 'Балки обвязки и металлокаркас 80х80х3, 40х40х2 (подсистемы Земля/Сваи и Бетон/Арматура)'],
     ['type_screw_pile', 'Винтовые сваи СВС-76/89/108 мм (подсистема Земля/Сваи)'],
     ['type_pile_cap', 'Оголовки винтовых свай 150х150 мм'],
-    ['type_rebar', 'Монтажная арматура d10 мм (подсистема Бетон/Арматура)']
+    ['type_rebar', 'Монтажная арматура d10 мм (подсистема Бетон/Арматура)'],
+    ['type_pillar', 'Опорный столб ограждения 100х100, 120х120 (корневой элемент pl_fence)'],
+    ['type_rail', 'Перила и поручни ограждения (слот rail)'],
+    ['type_baluster', 'Балясина секции ограждения (слот baluster)'],
+    ['type_lath', 'Декоративная рейка забора (слот lath)'],
+    ['type_fenceProfile', 'Заборный П-профиль (слот fenceProfile)'],
+    ['type_accessories', 'Крышки и юбки столба (слот accessories)']
   ];
 
   sheet.getRange(1, 1, content.length, 2).setValues(content);

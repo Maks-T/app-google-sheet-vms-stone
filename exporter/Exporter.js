@@ -41,13 +41,14 @@ function exportFullCatalogJson() {
     ],
     families: [
       GDK_CONFIG.FAMILIES.DECKING_SYSTEM,
+      GDK_CONFIG.FAMILIES.FENCE_SYSTEM,
       GDK_CONFIG.FAMILIES.HARDWARE_ACCESSORY
     ],
     types: getStandardProductTypesDefinition(),
     attributes: attributesSection,
     complex_dictionaries: getComplexDictionariesDefinition(),
     products: productsResult.products,
-    pipelines: [getTerracePipelineDefinition(), getJoistPipelineDefinition()],
+    pipelines: [getTerracePipelineDefinition(), getJoistPipelineDefinition(), getFencePipelineDefinition()],
     binding_rules: bindingRules
   };
 
@@ -76,7 +77,12 @@ function collectAllProductsFromSheets(ss) {
     { sheetName: '5. Лаги', type: 'joist' },
     { sheetName: '6. Кляймеры и крепеж', type: 'brackets' },
     { sheetName: '7. Регулируемые опоры', type: 'adjustable_pedestal' },
-    { sheetName: '8. Каркас и балки', altName: '8. Балки и сваи', type: 'foundation_beam' }
+    { sheetName: '8. Каркас и балки', altName: '8. Балки и сваи', type: 'foundation_beam' },
+    { sheetName: '10. Столбы', type: 'pillar' },
+    { sheetName: '11. Перила', type: 'rail' },
+    { sheetName: '12. Балясины', type: 'baluster' },
+    { sheetName: '13. Заборный профиль и рейка', type: 'fenceProfile' },
+    { sheetName: '14. Аксессуары ограждения', type: 'accessories' }
   ];
 
   const productsMap = new Map();
@@ -123,6 +129,12 @@ function collectAllProductsFromSheets(ss) {
         const lowerName = name.toLowerCase();
         if (lowerName.includes('саморез') || lowerName.includes('шуруп') || sku.toLowerCase().includes('screw')) {
           actualProductTypeExt = 'type_fasteners';
+        }
+      }
+      if (typeKey === 'fenceProfile') {
+        const lowerName = name.toLowerCase();
+        if (lowerName.includes('рейк') || sku.toLowerCase().includes('lath')) {
+          actualProductTypeExt = 'type_lath';
         }
       }
 

@@ -18,7 +18,12 @@ const INBOX_CONFIG = {
     '5. Лаги (joist)',
     '6. Кляймеры и крепеж (brackets)',
     '7. Регулируемые опоры (adjustable_pedestal)',
-    '8. Каркас и балки обвязки (foundation_beam)'
+    '8. Каркас и балки обвязки (foundation_beam)',
+    '10. Столбы (pillar)',
+    '11. Перила (rail)',
+    '12. Балясины (baluster)',
+    '13. Заборный профиль и рейка (fenceProfile)',
+    '14. Аксессуары ограждения (accessories)'
   ]
 };
 
@@ -68,6 +73,16 @@ function setupInboxLinksSheet() {
           resolvedCategory = '7. Регулируемые опоры (adjustable_pedestal)';
         } else if (targetUrl.includes('truba') || targetUrl.includes('profilnaya') || targetUrl.includes('frame')) {
           resolvedCategory = '8. Каркас и балки обвязки (foundation_beam)';
+        } else if (targetUrl.includes('stolb') || targetUrl.includes('pillar')) {
+          resolvedCategory = '10. Столбы (pillar)';
+        } else if (targetUrl.includes('perila') || targetUrl.includes('rail')) {
+          resolvedCategory = '11. Перила (rail)';
+        } else if (targetUrl.includes('balyasina') || targetUrl.includes('baluster')) {
+          resolvedCategory = '12. Балясины (baluster)';
+        } else if (targetUrl.includes('zaborny') || targetUrl.includes('reika') || targetUrl.includes('lath')) {
+          resolvedCategory = '13. Заборный профиль и рейка (fenceProfile)';
+        } else if (targetUrl.includes('kryshka') || targetUrl.includes('yubka') || targetUrl.includes('cap') || targetUrl.includes('skirt')) {
+          resolvedCategory = '14. Аксессуары ограждения (accessories)';
         }
 
         const canonicalCategory = normalizeToCanonicalCategory(resolvedCategory);
@@ -131,28 +146,46 @@ function normalizeToCanonicalCategory(categoryStr) {
   const lower = String(categoryStr || '').toLowerCase().trim();
   if (!lower) return '1. Доски (terraceBoard)';
 
-  if (lower.includes('1.') || (lower.includes('доск') && !lower.includes('универсаль') && !lower.includes('обрамлен') && !lower.includes('зашив') && !lower.includes('ун-ая') && !lower.includes('забор'))) {
+  // 1. Ограждения (10–14) проверяем в первую очередь через startsWith, исключая коллизию "11." с "1."
+  if (lower.startsWith('10.') || lower.includes('столб') || lower.includes('pillar')) {
+    return '10. Столбы (pillar)';
+  }
+  if (lower.startsWith('11.') || lower.includes('перил') || lower.includes('rail') || lower.includes('поручен') || lower.includes('поручн')) {
+    return '11. Перила (rail)';
+  }
+  if (lower.startsWith('12.') || lower.includes('балясин') || lower.includes('baluster')) {
+    return '12. Балясины (baluster)';
+  }
+  if (lower.startsWith('13.') || lower.includes('профиль') || lower.includes('рейк') || lower.includes('lath') || lower.includes('fenceprofile')) {
+    return '13. Заборный профиль и рейка (fenceProfile)';
+  }
+  if (lower.startsWith('14.') || lower.includes('аксессуар') || lower.includes('крышк') || lower.includes('юбк')) {
+    return '14. Аксессуары ограждения (accessories)';
+  }
+
+  // 2. Листы настила и каркаса (1–8) со строгим префиксом startsWith
+  if (lower.startsWith('1.') || (lower.includes('доск') && !lower.includes('универсаль') && !lower.includes('обрамлен') && !lower.includes('зашив') && !lower.includes('ун-ая') && !lower.includes('забор'))) {
     return '1. Доски (terraceBoard)';
   }
-  if (lower.includes('2.') || lower.includes('ступен')) {
+  if (lower.startsWith('2.') || lower.includes('ступен')) {
     return '2. Ступени (stepBoard)';
   }
-  if (lower.includes('3.') || lower.includes('угол')) {
+  if (lower.startsWith('3.') || lower.includes('угол')) {
     return '3. Уголки и декор (decorProducts)';
   }
-  if (lower.includes('4.') || lower.includes('универсаль') || lower.includes('зашив') || lower.includes('обрамлен') || lower.includes('ун-ая') || lower.includes('забор')) {
+  if (lower.startsWith('4.') || lower.includes('универсаль') || lower.includes('зашив') || lower.includes('обрамлен') || lower.includes('ун-ая') || lower.includes('забор')) {
     return '4. Универсальная доска (зашивка) (board)';
   }
-  if (lower.includes('5.') || lower.includes('лаг')) {
+  if (lower.startsWith('5.') || lower.includes('лаг')) {
     return '5. Лаги (joist)';
   }
-  if (lower.includes('6.') || lower.includes('кляймер') || lower.includes('кляммер') || lower.includes('клипс') || lower.includes('саморез') || lower.includes('крепеж')) {
+  if (lower.startsWith('6.') || lower.includes('кляймер') || lower.includes('кляммер') || lower.includes('клипс') || lower.includes('саморез') || lower.includes('крепеж')) {
     return '6. Кляймеры и крепеж (brackets)';
   }
-  if (lower.includes('7.') || lower.includes('опор') || lower.includes('level') || lower.includes('pedestal')) {
+  if (lower.startsWith('7.') || lower.includes('опор') || lower.includes('level') || lower.includes('pedestal')) {
     return '7. Регулируемые опоры (adjustable_pedestal)';
   }
-  if (lower.includes('8.') || lower.includes('каркас') || lower.includes('балк') || lower.includes('труб') || lower.includes('обвязк')) {
+  if (lower.startsWith('8.') || lower.includes('каркас') || lower.includes('балк') || lower.includes('труб') || lower.includes('обвязк')) {
     return '8. Каркас и балки обвязки (foundation_beam)';
   }
 
@@ -161,14 +194,19 @@ function normalizeToCanonicalCategory(categoryStr) {
 
 function mapInboxCategoryToTargetSheet(categoryStr) {
   const canonical = normalizeToCanonicalCategory(categoryStr);
-  if (canonical.includes('1.')) return '1. Доски';
-  if (canonical.includes('2.')) return '2. Ступени';
-  if (canonical.includes('3.')) return '3. Уголки и декор';
-  if (canonical.includes('4.')) return '4. Универсальная доска (зашивка)';
-  if (canonical.includes('5.')) return '5. Лаги';
-  if (canonical.includes('6.')) return '6. Кляймеры и крепеж';
-  if (canonical.includes('7.')) return '7. Регулируемые опоры';
-  if (canonical.includes('8.')) return '8. Каркас и балки';
+  if (canonical.startsWith('10.')) return '10. Столбы';
+  if (canonical.startsWith('11.')) return '11. Перила';
+  if (canonical.startsWith('12.')) return '12. Балясины';
+  if (canonical.startsWith('13.')) return '13. Заборный профиль и рейка';
+  if (canonical.startsWith('14.')) return '14. Аксессуары ограждения';
+  if (canonical.startsWith('1.')) return '1. Доски';
+  if (canonical.startsWith('2.')) return '2. Ступени';
+  if (canonical.startsWith('3.')) return '3. Уголки и декор';
+  if (canonical.startsWith('4.')) return '4. Универсальная доска (зашивка)';
+  if (canonical.startsWith('5.')) return '5. Лаги';
+  if (canonical.startsWith('6.')) return '6. Кляймеры и крепеж';
+  if (canonical.startsWith('7.')) return '7. Регулируемые опоры';
+  if (canonical.startsWith('8.')) return '8. Каркас и балки';
   return null;
 }
 
@@ -194,7 +232,12 @@ function distributeInboxLinksToSheets() {
     '5. Лаги': ss.getSheetByName('5. Лаги'),
     '6. Кляймеры и крепеж': ss.getSheetByName('6. Кляймеры и крепеж'),
     '7. Регулируемые опоры': ss.getSheetByName('7. Регулируемые опоры'),
-    '8. Каркас и балки': ss.getSheetByName('8. Каркас и балки') || ss.getSheetByName('8. Балки и сваи')
+    '8. Каркас и балки': ss.getSheetByName('8. Каркас и балки') || ss.getSheetByName('8. Балки и сваи'),
+    '10. Столбы': ss.getSheetByName('10. Столбы'),
+    '11. Перила': ss.getSheetByName('11. Перила'),
+    '12. Балясины': ss.getSheetByName('12. Балясины'),
+    '13. Заборный профиль и рейка': ss.getSheetByName('13. Заборный профиль и рейка'),
+    '14. Аксессуары ограждения': ss.getSheetByName('14. Аксессуары ограждения')
   };
 
   const targetExistingUrls = {};
@@ -217,7 +260,12 @@ function distributeInboxLinksToSheets() {
     '5. Лаги': [],
     '6. Кляймеры и крепеж': [],
     '7. Регулируемые опоры': [],
-    '8. Каркас и балки': []
+    '8. Каркас и балки': [],
+    '10. Столбы': [],
+    '11. Перила': [],
+    '12. Балясины': [],
+    '13. Заборный профиль и рейка': [],
+    '14. Аксессуары ограждения': []
   };
 
   let carriedCategory = '';
