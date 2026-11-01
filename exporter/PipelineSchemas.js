@@ -1,6 +1,27 @@
 /**
- * exporter/PipelineSchemas.js — Определение схем пайплайнов pl_terrace и pl_joist
+ * exporter/PipelineSchemas.js — Схемы пайплайнов pl_terrace, pl_fence, pl_joist, pl_stairs
  */
+
+function getAllPipelineDefinitions() {
+  return [
+    getTerracePipelineDefinition(),
+    getJoistPipelineDefinition(),
+    getFencePipelineDefinition(),
+    getStairsPipelineDefinition()
+  ];
+}
+
+function getScalarRoleCodes() {
+  const roles = [];
+  getAllPipelineDefinitions().forEach(p => {
+    Object.values(p.schema).forEach(slots => {
+      Object.keys(slots).forEach(role => {
+        if (slots[role].target_type === 'scalar' && !roles.includes(role)) roles.push(role);
+      });
+    });
+  });
+  return roles;
+}
 
 function getTerracePipelineDefinition() {
   return {
@@ -83,10 +104,6 @@ function getTerracePipelineDefinition() {
   };
 }
 
-/**
- * Определение пайплайна pl_fence — Конфигуратор систем ограждений (ДПК)
- * Строго по Архитектурной диаграмме 1 и FencePipelineSchema
- */
 function getFencePipelineDefinition() {
   return {
     external_code: "pl_fence",
@@ -246,6 +263,69 @@ function getJoistPipelineDefinition() {
           label_key: { ru: "Крепление лаги (саморез)", en: "Joist Screw" },
           target_type: "product_type",
           target_code: "fasteners",
+          is_required: true,
+          is_multiple: false
+        }
+      },
+      screw_pile: {
+        pile_head: {
+          label_key: { ru: "Оголовок сваи", en: "Pile Head" },
+          target_type: "product_type",
+          target_code: "pile_cap",
+          is_required: false,
+          is_multiple: false
+        }
+      }
+    }
+  };
+}
+
+function getStairsPipelineDefinition() {
+  return {
+    external_code: "pl_stairs",
+    code: "pl_stairs",
+    slug: "stairs",
+    name: {
+      ru: "Конфигуратор приставных лестниц и крыльца (ДПК)",
+      en: "Stairs and Entrance Configurator"
+    },
+    is_active: true,
+    sort_order: 40,
+    ui_state: [],
+    schema: {
+      stepBoard: {
+        riserBoard: {
+          label_key: { ru: "Доска подступенка", en: "Riser Board" },
+          target_type: "product_type",
+          target_code: "board",
+          is_required: false,
+          is_multiple: false
+        },
+        stairClip: {
+          label_key: { ru: "Крепеж для ступеней", en: "Step Clip" },
+          target_type: "product_type",
+          target_code: "brackets",
+          is_required: true,
+          is_multiple: false
+        },
+        clipFastener: {
+          label_key: { ru: "Саморез для крепежа ступени", en: "Clip Fastener" },
+          target_type: "product_type",
+          target_code: "fasteners",
+          is_required: true,
+          is_multiple: false
+        },
+        frameTube: {
+          label_key: { ru: "Профильная труба каркаса", en: "Frame Tube" },
+          target_type: "product_type",
+          target_code: "foundation_beam",
+          is_required: true,
+          is_multiple: false
+        },
+        noseSize: {
+          label_key: { ru: "Размер носика (капиноса)", en: "Nose Size" },
+          target_type: "scalar",
+          target_code: null,
           is_required: true,
           is_multiple: false
         }

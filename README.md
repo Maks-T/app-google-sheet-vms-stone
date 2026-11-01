@@ -30,8 +30,10 @@ app-google-sheet-vms-stone/
 ├── sheets/
 │   ├── Inbox.js                   # Лист «Входные ссылки»: дедупликация и авто-распределение
 │   ├── Boards.js                  # Лист «1. Доски»: развертывание торговых предложений (SKU)
-│   ├── Components.js              # Листы 2–8: Ступени, Уголки, Зашивка, Лаги, Крепеж, Опоры, Каркас
-│   └── Pipeline.js                # Лист «9. Связи калькулятора»: авто-подбор пар, syncDropdowns()
+│   ├── Components.js              # Листы 2–18: комплектующие, основание, ограждения, ручные позиции
+│   ├── Bindings.js                # Листы «Привязки pl_*»: по одному на пайплайн, проверка и списки
+│   ├── AutoBindings.js            # Автозаполнение привязок из каталога по цвету, бренду и словам в названии
+│   └── JsonImport.js              # Загрузка привязок и недостающих товаров из import_data.json
 │
 ├── dictionaries/
 │   ├── Dictionaries.js            # getComplexDictionariesDefinition() — точка сборки
@@ -42,9 +44,8 @@ app-google-sheet-vms-stone/
 ├── exporter/
 │   ├── Exporter.js                # exportFullCatalogJson() — сборка полного import_data.json
 │   ├── ProductTypesSchema.js      # getStandardProductTypesDefinition() — 12 типов товаров
-│   ├── PipelineSchemas.js         # Схемы пайплайнов pl_terrace и pl_joist
-│   ├── BindingRulesCollector.js   # collectAllBindingRules() — правила связей лаг, крепежа, свай
-│   ├── SystemProducts.js          # ensureDefaultSystemItems() — саморезы 00124, сваи, оголовки, ЦПС, арматура
+│   ├── PipelineSchemas.js         # Схемы пайплайнов pl_terrace, pl_fence, pl_joist, pl_stairs
+│   ├── BindingRulesCollector.js   # collectAllBindingRules() — правила только с листов привязок
 │   └── SettingsExporter.js        # exportImportSettingsJson() — генератор import_settings.json
 │
 ├── .clasp.json                    # Конфигурация привязки к Google Apps Script

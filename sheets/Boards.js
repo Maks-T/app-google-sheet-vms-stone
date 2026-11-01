@@ -15,6 +15,7 @@ function setupBoardsSheet() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = getBoardsSheet(ss);
 
+  const manualRows = readManualCatalogRows(sheet);
   const preservedUrls = [];
   const lastRow = sheet.getLastRow();
   if (lastRow > 1) {
@@ -39,13 +40,13 @@ function setupBoardsSheet() {
   setupSelfSufficientSheetLayout(sheet);
   sheet.setName('1. Доски');
 
-  if (preservedUrls.length > 0) {
-    const restoreRows = preservedUrls.map(url => {
-      const row = new Array(GDK_CONFIG.SHEET_COLUMNS.length).fill('');
-      row[0] = 'В очереди';
-      row[15] = url;
-      return row;
-    });
+  const restoreRows = preservedUrls.map(url => {
+    const row = new Array(GDK_CONFIG.SHEET_COLUMNS.length).fill('');
+    row[0] = 'В очереди';
+    row[15] = url;
+    return row;
+  }).concat(manualRows);
+  if (restoreRows.length > 0) {
     sheet.getRange(2, 1, restoreRows.length, GDK_CONFIG.SHEET_COLUMNS.length).setValues(restoreRows);
   }
 
@@ -151,9 +152,10 @@ function parseBoardsToFullCatalog() {
   }
 
   if (newCatalogRows.length > 0) {
+    const allRows = newCatalogRows.map(padCatalogRow).concat(readManualCatalogRows(sheet));
     const lastRow = Math.max(sheet.getLastRow(), 2);
     sheet.getRange(2, 1, lastRow - 1, GDK_CONFIG.SHEET_COLUMNS.length).clearContent();
-    sheet.getRange(2, 1, newCatalogRows.length, GDK_CONFIG.SHEET_COLUMNS.length).setValues(newCatalogRows);
+    sheet.getRange(2, 1, allRows.length, GDK_CONFIG.SHEET_COLUMNS.length).setValues(allRows);
   }
 
   SpreadsheetApp.getUi().alert(

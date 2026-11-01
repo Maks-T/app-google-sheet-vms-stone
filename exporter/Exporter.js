@@ -1,5 +1,5 @@
 /**
- * exporter/Exporter.js — Экспорт полного пакета каталога в import_data.json для платформы VMS-NC
+ * exporter/Exporter.js — Экспорт import_data.json для VMS-NC
  */
 
 function exportFullCatalogJson() {
@@ -11,7 +11,9 @@ function exportFullCatalogJson() {
     return;
   }
 
-  const bindingRules = collectAllBindingRules(ss);
+  const bindingResult = collectAllBindingRules(ss, true);
+  const bindingRules = bindingResult.rules;
+  const bindingErrors = bindingResult.report.reduce((sum, r) => sum + r.errors, 0);
   const attributesSection = buildDynamicAttributesSection(productsResult.usedBrands, productsResult.usedColors);
 
   const importData = {
@@ -48,7 +50,7 @@ function exportFullCatalogJson() {
     attributes: attributesSection,
     complex_dictionaries: getComplexDictionariesDefinition(),
     products: productsResult.products,
-    pipelines: [getTerracePipelineDefinition(), getJoistPipelineDefinition(), getFencePipelineDefinition()],
+    pipelines: getAllPipelineDefinitions(),
     binding_rules: bindingRules
   };
 
@@ -60,6 +62,7 @@ function exportFullCatalogJson() {
     `Сформирован полный файл <b>import_data.json</b>.<br>` +
     `Товаров (моделей): <b>${productsResult.products.length}</b> | ` +
     `Связей калькулятора: <b>${bindingRules.length}</b>` +
+    (bindingErrors ? ` | <span style="color:#B91C1C">Строк привязок с ошибками (пропущены): <b>${bindingErrors}</b></span>` : '') +
     `</p>` +
     `<textarea style="width:100%;height:380px;font-family:monospace;font-size:11px;padding:8px;" readonly onClick="this.select();">${jsonString}</textarea>` +
     `</div>`
@@ -69,37 +72,19 @@ function exportFullCatalogJson() {
 }
 
 function collectAllProductsFromSheets(ss) {
-  const sheetsToScan = [
-    { sheetName: '1. Доски', type: 'terraceBoard' },
-    { sheetName: '2. Ступени', type: 'stepBoard' },
-    { sheetName: '3. Уголки и декор', type: 'decorProducts' },
-    { sheetName: '4. Универсальная доска (зашивка)', altName: '4. Доска обрамления', type: 'board' },
-    { sheetName: '5. Лаги', type: 'joist' },
-    { sheetName: '6. Кляймеры и крепеж', type: 'brackets' },
-    { sheetName: '7. Регулируемые опоры', type: 'adjustable_pedestal' },
-    { sheetName: '8. Каркас и балки', altName: '8. Балки и сваи', type: 'foundation_beam' },
-    { sheetName: '10. Столбы', type: 'pillar' },
-    { sheetName: '11. Перила', type: 'rail' },
-    { sheetName: '12. Балясины', type: 'baluster' },
-    { sheetName: '13. Заборный профиль и рейка', type: 'fenceProfile' },
-    { sheetName: '14. Аксессуары ограждения', type: 'accessories' }
-  ];
-
+  const sheetsToScan = GDK_CONFIG.CATALOG_SHEETS;
+  // скаляры привязок (holes, noseSize) не атрибуты товара
+  const scalarRoles = getScalarRoleCodes();
   const productsMap = new Map();
   const usedBrands = new Set();
   const usedColors = new Map();
 
   sheetsToScan.forEach(scanMeta => {
-    let sheet = ss.getSheetByName(scanMeta.sheetName);
-    if (!sheet && scanMeta.altName) {
-      sheet = ss.getSheetByName(scanMeta.altName);
-    }
+    const sheet = findCatalogSheet(ss, scanMeta);
     if (!sheet || sheet.getLastRow() < 2) return;
 
     const data = sheet.getDataRange().getValues();
     const typeKey = scanMeta.type;
-    let defaultProductTypeExt = GDK_CONFIG.PRODUCT_TYPES[typeKey] || 'type_terraceBoard';
-    const calcCategory = GDK_CONFIG.CALC_CATEGORIES[typeKey] || null;
 
     for (let r = 1; r < data.length; r++) {
       const productCode = String(data[r][1] || '').trim();
@@ -122,21 +107,16 @@ function collectAllProductsFromSheets(ss) {
         sourceUrl = (rawSourceUrl && rawSourceUrl.length > 10 && rawSourceUrl.startsWith('http')) ? rawSourceUrl : null;
       }
 
+      const stockRaw = data[r][17];
+      const stock = stockRaw === '' || stockRaw === null || stockRaw === undefined || isNaN(Number(stockRaw)) ? null : Number(stockRaw);
+      const extraEav = parseExtraEav(data[r][18]);
+      scalarRoles.forEach(k => delete extraEav[k]);
+
       if (!productCode || !sku) continue;
 
-      let actualProductTypeExt = defaultProductTypeExt;
-      if (typeKey === 'brackets') {
-        const lowerName = name.toLowerCase();
-        if (lowerName.includes('саморез') || lowerName.includes('шуруп') || sku.toLowerCase().includes('screw')) {
-          actualProductTypeExt = 'type_fasteners';
-        }
-      }
-      if (typeKey === 'fenceProfile') {
-        const lowerName = name.toLowerCase();
-        if (lowerName.includes('рейк') || sku.toLowerCase().includes('lath')) {
-          actualProductTypeExt = 'type_lath';
-        }
-      }
+      const rowType = resolveCatalogType(typeKey, name, sku);
+      const actualProductTypeExt = GDK_CONFIG.PRODUCT_TYPES[rowType];
+      const calcCategory = GDK_CONFIG.CALC_CATEGORIES[rowType] || GDK_CONFIG.CALC_CATEGORIES[typeKey] || null;
 
       usedBrands.add(brand);
       if (colorSlug && !usedColors.has(colorSlug)) {
@@ -178,6 +158,7 @@ function collectAllProductsFromSheets(ss) {
         }
         if (typeKey === 'rebar' && widthMm) eav.diameter_mm = widthMm;
         if (sourceUrl) eav.source_url = sourceUrl;
+        Object.assign(eav, extraEav);
 
         productsMap.set(productCode, {
           external_code: productCode,
@@ -232,9 +213,9 @@ function collectAllProductsFromSheets(ss) {
         sku: uniqueSku,
         name: { ru: name, en: name },
         price_group_external_code: null,
-        stock: null,
+        stock: stock,
         is_default: isDefault,
-        is_manual_pricing: false,
+        is_manual_pricing: !sourceUrl,
         cost_price: costPrice,
         currency: "RUB",
         price: priceRetail,
@@ -246,8 +227,6 @@ function collectAllProductsFromSheets(ss) {
       currentProduct.variants.push(variantPayload);
     }
   });
-
-  ensureDefaultSystemItems(productsMap);
 
   return {
     products: Array.from(productsMap.values()),
@@ -435,14 +414,13 @@ function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
 
 function exportBindingRulesJson() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheet = getPipelineSheet(ss);
-  if (!sheet) return;
-
-  const rules = collectAllBindingRules(ss);
+  const result = collectAllBindingRules(ss, true);
+  const rules = result.rules;
+  const report = result.report.map(r => `${r.pipeline}: ${r.rules}` + (r.errors ? ` (ошибок ${r.errors})` : '')).join(' | ');
 
   const jsonOutput = JSON.stringify(rules, null, 2);
   const htmlOutput = HtmlService.createHtmlOutput(
-    '<p style="font-family:sans-serif;margin-bottom:8px;">Сформировано правил связей: <b>' + rules.length + '</b>. Скопируйте этот массив в раздел <code>"binding_rules": [...]</code> вашего файла <b>import/import_data.json</b>:</p>' +
+    '<p style="font-family:sans-serif;margin-bottom:8px;">Правил: <b>' + rules.length + '</b> — ' + report + '. Скопируйте массив в раздел <code>"binding_rules": [...]</code> файла <b>import/import_data.json</b>:</p>' +
     '<textarea style="width:100%;height:370px;font-family:monospace;font-size:11px;" readonly onClick="this.select();">' + jsonOutput + '</textarea>'
   ).setWidth(720).setHeight(490);
 

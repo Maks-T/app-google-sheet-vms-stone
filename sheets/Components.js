@@ -1,95 +1,18 @@
 /**
- * sheets/Components.js — Модуль управления листами комплектующих и основания GreenDecks
+ * sheets/Components.js — Листы комплектующих, основания и ограждений
  */
 
 function getGdkComponentSheets() {
-  return [
-    {
-      sheetName: '2. Ступени',
-      type: 'stepBoard',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.stepBoard,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.stepBoard
-    },
-    {
-      sheetName: '3. Уголки и декор',
-      type: 'decorProducts',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.decorProducts,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.decorProducts
-    },
-    {
-      sheetName: '4. Универсальная доска (зашивка)',
-      type: 'board',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.board,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.board
-    },
-    {
-      sheetName: '5. Лаги',
-      type: 'joist',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.joist,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.joist
-    },
-    {
-      sheetName: '6. Кляймеры и крепеж',
-      type: 'brackets',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.brackets,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.brackets
-    },
-    {
-      sheetName: '7. Регулируемые опоры',
-      type: 'adjustable_pedestal',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.adjustable_pedestal,
-      calcCategory: null
-    },
-    {
-      sheetName: '8. Каркас и балки',
-      type: 'foundation_beam',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.foundation_beam,
-      calcCategory: null
-    },
-    {
-      sheetName: '10. Столбы',
-      type: 'pillar',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.pillar,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.pillar
-    },
-    {
-      sheetName: '11. Перила',
-      type: 'rail',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.rail,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.rail
-    },
-    {
-      sheetName: '12. Балясины',
-      type: 'baluster',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.baluster,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.baluster
-    },
-    {
-      sheetName: '13. Заборный профиль и рейка',
-      type: 'fenceProfile',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.fenceProfile,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.fenceProfile
-    },
-    {
-      sheetName: '14. Аксессуары ограждения',
-      type: 'accessories',
-      productTypeExt: GDK_CONFIG.PRODUCT_TYPES.accessories,
-      calcCategory: GDK_CONFIG.CALC_CATEGORIES.accessories
-    }
-  ];
+  return GDK_CONFIG.CATALOG_SHEETS
+    .filter(meta => meta.type !== 'terraceBoard')
+    .map(meta => Object.assign({}, meta, {
+      productTypeExt: GDK_CONFIG.PRODUCT_TYPES[meta.type],
+      calcCategory: GDK_CONFIG.CALC_CATEGORIES[meta.type] || null
+    }));
 }
 
 function findComponentSheet(ss, targetMeta) {
-  let sheet = ss.getSheetByName(targetMeta.sheetName);
-  if (!sheet && targetMeta.type === 'board') {
-    sheet = ss.getSheetByName('4. Доска обрамления');
-    if (sheet) sheet.setName(targetMeta.sheetName);
-  }
-  if (!sheet && targetMeta.type === 'foundation_beam') {
-    sheet = ss.getSheetByName('8. Балки и сваи');
-    if (sheet) sheet.setName(targetMeta.sheetName);
-  }
-  return sheet;
+  return findCatalogSheet(ss, targetMeta);
 }
 
 function setupAllComponentSheets() {
@@ -102,6 +25,7 @@ function setupAllComponentSheets() {
       sheet = ss.insertSheet(meta.sheetName);
     }
 
+    const manualRows = readManualCatalogRows(sheet);
     const preservedUrls = [];
     const lastRow = sheet.getLastRow();
     if (lastRow > 1) {
@@ -120,13 +44,13 @@ function setupAllComponentSheets() {
 
     setupSelfSufficientSheetLayout(sheet);
 
-    if (preservedUrls.length > 0) {
-      const restoreRows = preservedUrls.map(url => {
-        const row = new Array(GDK_CONFIG.SHEET_COLUMNS.length).fill('');
-        row[0] = 'В очереди';
-        row[15] = url;
-        return row;
-      });
+    const restoreRows = preservedUrls.map(url => {
+      const row = new Array(GDK_CONFIG.SHEET_COLUMNS.length).fill('');
+      row[0] = 'В очереди';
+      row[15] = url;
+      return row;
+    }).concat(manualRows);
+    if (restoreRows.length > 0) {
       sheet.getRange(2, 1, restoreRows.length, GDK_CONFIG.SHEET_COLUMNS.length).setValues(restoreRows);
     }
   });
@@ -166,8 +90,7 @@ function parseActiveComponentSheet() {
   const sheetName = sheet.getName();
   const componentSheets = getGdkComponentSheets();
 
-  const meta = componentSheets.find(m => m.sheetName === sheetName)
-    || (sheetName.includes('обрамлен') ? componentSheets.find(m => m.type === 'board') : null);
+  const meta = componentSheets.find(m => m.sheetName === sheetName || (m.altNames || []).includes(sheetName));
 
   if (!meta) {
     SpreadsheetApp.getUi().alert(`Лист "${sheetName}" не является зарегистрированным листом комплектующих.`);
@@ -242,7 +165,7 @@ function parseSingleComponentSheet(sheet, meta) {
           ? `H: ${product.height_min}-${product.height_max} мм (${product.max_load_kg || 1000} кг)`
           : `OK: ${new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
 
-        newRows.push([
+        newRows.push(padCatalogRow([
           'Готов',
           baseCode,
           sku,
@@ -260,7 +183,7 @@ function parseSingleComponentSheet(sheet, meta) {
           v.image_url || product.main_image || '',
           url,
           logComment
-        ]);
+        ]));
       });
       processedCount++;
     } catch (e) {
@@ -269,9 +192,10 @@ function parseSingleComponentSheet(sheet, meta) {
   }
 
   if (newRows.length > 0) {
+    const allRows = newRows.concat(readManualCatalogRows(sheet));
     const lastRow = Math.max(sheet.getLastRow(), 2);
     sheet.getRange(2, 1, lastRow - 1, GDK_CONFIG.SHEET_COLUMNS.length).clearContent();
-    sheet.getRange(2, 1, newRows.length, GDK_CONFIG.SHEET_COLUMNS.length).setValues(newRows);
+    sheet.getRange(2, 1, allRows.length, GDK_CONFIG.SHEET_COLUMNS.length).setValues(allRows);
   }
 
   return { processed: processedCount, skus: newRows.length };

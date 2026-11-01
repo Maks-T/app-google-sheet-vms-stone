@@ -63,6 +63,29 @@ var GDK_CONFIG = {
     'accessories': '9SyNj-0fgsfUajCqxkAEu1'
   },
 
+  // листы каталога: имя → тип товара
+  CATALOG_SHEETS: [
+    { sheetName: '1. Доски', type: 'terraceBoard', altNames: ['1. Доски (Входные ссылки)'] },
+    { sheetName: '2. Ступени', type: 'stepBoard' },
+    { sheetName: '3. Уголки и декор', type: 'decorProducts' },
+    { sheetName: '4. Универсальная доска (зашивка)', type: 'board', altNames: ['4. Доска обрамления'] },
+    { sheetName: '5. Лаги', type: 'joist' },
+    { sheetName: '6. Кляймеры и крепеж', type: 'brackets' },
+    { sheetName: '7. Регулируемые опоры', type: 'adjustable_pedestal' },
+    { sheetName: '8. Каркас и балки', type: 'foundation_beam', altNames: ['8. Балки и сваи'] },
+    { sheetName: '10. Столбы', type: 'pillar' },
+    { sheetName: '11. Перила', type: 'rail' },
+    { sheetName: '12. Балясины', type: 'baluster' },
+    { sheetName: '13. Заборный профиль и рейка', type: 'fenceProfile' },
+    { sheetName: '14. Аксессуары ограждения', type: 'accessories' },
+    { sheetName: '15. Саморезы и расходники', type: 'fasteners' },
+    { sheetName: '16. Сваи', type: 'screw_pile' },
+    { sheetName: '17. Оголовки свай', type: 'pile_cap' },
+    { sheetName: '18. Арматура', type: 'rebar' }
+  ],
+
+  STATUS_OPTIONS: ['В очереди', 'Готов', 'Ошибка', 'Ручной'],
+
   // Единая схема колонок для всех самодостаточных листов каталога
   SHEET_COLUMNS: [
     'status',
@@ -81,11 +104,13 @@ var GDK_CONFIG = {
     'cost_price',
     'image_url',
     'product_url',
-    'comment'
+    'comment',
+    'stock',
+    'extra_eav'
   ],
 
   COLUMN_NOTES: [
-    'Статус: В очереди / Готов / Ошибка',
+    'Статус: В очереди / Готов / Ошибка / Ручной (позиция без ссылки, парсер её не трогает)',
     'Системный код товара (external_code: odk_...)',
     'Артикул модификации SKU',
     'Наименование товара',
@@ -101,6 +126,8 @@ var GDK_CONFIG = {
     'Себестоимость, RUB',
     'Ссылка на фото (CDN / оригинальное)',
     'URL страницы товара',
-    'Результат и логи'
+    'Результат и логи',
+    'Остаток (stock), необязательно',
+    'Доп. атрибуты EAV: diameter_mm=89; blade_diameter_mm=250; has_head=false'
   ]
 };
