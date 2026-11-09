@@ -6,6 +6,16 @@ var GDK_CONFIG = {
   CURRENCY: 'RUB',
   BASE_URL: 'https://oliverdeck.ru',
 
+  // Картинки в import_data.json: 'url' → исходная ссылка (скачиваются отдельно),
+  // 'local' → products/{имя}_{md5(путь)[:6]}.webp из import/export_images/products/
+  IMAGES: {
+    MODE: 'url',
+    DIR: 'products',
+    EXT: 'webp',
+    // заглушки сайта, а не фото товара
+    PLACEHOLDERS: ['/g/spacer.gif']
+  },
+
   // Коды продуктовых семейств VMS-NC
   FAMILIES: {
     DECKING_SYSTEM: {

@@ -114,6 +114,8 @@ function getStandardProductTypesDefinition() {
         { code: "height_min", is_variant_only: false },
         { code: "height_max", is_variant_only: false },
         { code: "max_load_kg", is_variant_only: false },
+        { code: "base_diameter_mm", is_variant_only: false },
+        { code: "head_diameter_mm", is_variant_only: false },
         { code: "source_url", is_variant_only: false },
         { code: "color", is_variant_only: true }
       ]

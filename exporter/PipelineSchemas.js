@@ -305,7 +305,7 @@ function getStairsPipelineDefinition() {
           label_key: { ru: "Крепеж для ступеней", en: "Step Clip" },
           target_type: "product_type",
           target_code: "brackets",
-          is_required: true,
+          is_required: false,
           is_multiple: false
         },
         clipFastener: {

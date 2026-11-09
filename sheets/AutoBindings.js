@@ -23,6 +23,7 @@ var AUTO_SEEDS = {
   'pl_terrace|terraceBoard|baseClip': ['промежуточ+№7+металлопроф', ''],
   'pl_terrace|board|fixing': ['4,2|4.2', ''],
   'pl_terrace|stepBoard|noseSize': ['', '', '20'],
+  'pl_terrace|brackets|holes': ['', '', '1'],
   'pl_fence|pillar|bracket': ['столб', ''],
   'pl_fence|pillar|bracketFastener': ['3,5|3.5', ''],
   'pl_fence|pillar|accessories': ['крышк|юбк', ''],
@@ -34,6 +35,7 @@ var AUTO_SEEDS = {
   'pl_fence|fenceProfile|bracketFastener': ['саморез', ''],
   'pl_fence|fenceProfile|lathFastener': ['саморез', ''],
   'pl_fence|lath|lathFastener': ['саморез', ''],
+  'pl_fence|brackets|holes': ['', '', '2'],
   'pl_joist|joist|fixing': ['4,2|4.2', ''],
   'pl_stairs|stepBoard|stairClip': ['ступен', ''],
   'pl_stairs|stepBoard|clipFastener': ['4,8|4.8', ''],
@@ -61,7 +63,7 @@ function setupAutoBindingSettingsSheet() {
           slot.target_type === 'scalar' ? 'scalar' : slot.target_code,
           old ? old.include : seed[0],
           old ? old.exclude : seed[1],
-          old ? old.defaultValue : (seed[2] || ''),
+          old && old.defaultValue !== '' ? old.defaultValue : (seed[2] || ''),
           old ? old.enabled : true
         ]);
       });

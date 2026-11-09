@@ -64,7 +64,7 @@ function exportFullCatalogJson() {
     `Связей калькулятора: <b>${bindingRules.length}</b>` +
     (bindingErrors ? ` | <span style="color:#B91C1C">Строк привязок с ошибками (пропущены): <b>${bindingErrors}</b></span>` : '') +
     `</p>` +
-    `<textarea style="width:100%;height:380px;font-family:monospace;font-size:11px;padding:8px;" readonly onClick="this.select();">${jsonString}</textarea>` +
+    `<textarea style="width:100%;height:380px;font-family:monospace;font-size:11px;padding:8px;" readonly onClick="this.select();">${escapeHtml(jsonString)}</textarea>` +
     `</div>`
   ).setWidth(780).setHeight(500);
 
@@ -100,7 +100,7 @@ function collectAllProductsFromSheets(ss) {
       const thicknessMm = parseFloat(data[r][11]) || null;
       const priceRetail = parseFloat(data[r][12]) || 0;
       const costPrice = parseFloat(data[r][13]) || (priceRetail > 0 ? Math.round(priceRetail * 0.7) : null);
-      const imageUrl = String(data[r][14] || '').trim() || null;
+      const imageUrl = toImportImagePath(data[r][14]);
       const rawSourceUrl = String(data[r][15] || '').trim() || null;
       let sourceUrl = cleanProductUrl(rawSourceUrl);
       if (!sourceUrl || sourceUrl.length < 12 || (!sourceUrl.startsWith('http://') && !sourceUrl.startsWith('https://'))) {
@@ -138,10 +138,22 @@ function collectAllProductsFromSheets(ss) {
 
         if (calcCategory) eav.product_calc_category = calcCategory;
 
+        // размеры профиля берем из названия (40х40х2), на листе они бывают неверными
+        const profile = typeKey === 'foundation_beam' ? parseProfileFromName(cleanBaseName) : null;
+        const beamWidth = profile ? profile.width : widthMm;
+        const beamHeight = profile ? profile.height : thicknessMm;
+
         if (typeKey === 'adjustable_pedestal') {
           if (lengthMm) eav.height_min = lengthMm;
           if (widthMm) eav.height_max = widthMm;
           if (thicknessMm) eav.max_load_kg = thicknessMm;
+        } else if (typeKey === 'foundation_beam') {
+          if (lengthMm) eav.length_mm = lengthMm;
+          if (beamWidth) eav.width_mm = beamWidth;
+          if (beamHeight) {
+            eav.thickness_mm = beamHeight;
+            eav.height_mm = beamHeight;
+          }
         } else {
           if (lengthMm) eav.length_mm = lengthMm;
           if (widthMm) eav.width_mm = widthMm;
@@ -151,10 +163,9 @@ function collectAllProductsFromSheets(ss) {
           }
         }
         if (typeKey === 'foundation_beam') {
-          if (widthMm) eav.profile_width_mm = widthMm;
-          if (thicknessMm) eav.profile_height_mm = thicknessMm;
-          const wallMatch = /(?:x|х)\s*(\d{1,2})(?:\s*мм|$)/i.exec(cleanBaseName);
-          eav.wall_thickness_mm = wallMatch ? parseFloat(wallMatch[1]) : (widthMm >= 80 ? 3 : 2);
+          if (beamWidth) eav.profile_width_mm = beamWidth;
+          if (beamHeight) eav.profile_height_mm = beamHeight;
+          eav.wall_thickness_mm = profile && profile.wall ? profile.wall : (beamWidth >= 80 ? 3 : 2);
         }
         if (typeKey === 'rebar' && widthMm) eav.diameter_mm = widthMm;
         if (sourceUrl) eav.source_url = sourceUrl;
@@ -408,6 +419,22 @@ function buildDynamicAttributesSection(usedBrands, usedColorsMap) {
       name: { ru: "Ссылка на товар", en: "Product URL" },
       is_multiple: false,
       options: []
+    },
+    {
+      external_code: "attr_base_diameter_mm",
+      code: "base_diameter_mm",
+      type: "numeric",
+      name: { ru: "Диаметр основания, мм", en: "Base Diameter, mm" },
+      is_multiple: false,
+      options: []
+    },
+    {
+      external_code: "attr_head_diameter_mm",
+      code: "head_diameter_mm",
+      type: "numeric",
+      name: { ru: "Диаметр головы, мм", en: "Head Diameter, mm" },
+      is_multiple: false,
+      options: []
     }
   ];
 }
@@ -421,7 +448,7 @@ function exportBindingRulesJson() {
   const jsonOutput = JSON.stringify(rules, null, 2);
   const htmlOutput = HtmlService.createHtmlOutput(
     '<p style="font-family:sans-serif;margin-bottom:8px;">Правил: <b>' + rules.length + '</b> — ' + report + '. Скопируйте массив в раздел <code>"binding_rules": [...]</code> файла <b>import/import_data.json</b>:</p>' +
-    '<textarea style="width:100%;height:370px;font-family:monospace;font-size:11px;" readonly onClick="this.select();">' + jsonOutput + '</textarea>'
+    '<textarea style="width:100%;height:370px;font-family:monospace;font-size:11px;" readonly onClick="this.select();">' + escapeHtml(jsonOutput) + '</textarea>'
   ).setWidth(720).setHeight(490);
 
   SpreadsheetApp.getUi().showModalDialog(htmlOutput, 'Экспорт массива binding_rules');

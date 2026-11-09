@@ -188,3 +188,43 @@ function parseExtraEav(text) {
 function formatExtraEav(obj) {
   return Object.keys(obj).map(k => k + '=' + obj[k]).join('; ');
 }
+
+function md5Hex(text) {
+  const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, text, Utilities.Charset.UTF_8);
+  return bytes.map(b => ('0' + (b & 0xff).toString(16)).slice(-2)).join('');
+}
+
+// ссылка на фото → путь для импорта; уже локальный путь не трогаем
+function toImportImagePath(url) {
+  const src = String(url || '').trim();
+  if (!src) return null;
+  if (!/^https?:\/\//i.test(src)) return src;
+
+  const path = src.replace(/^https?:\/\/[^\/]+/i, '').split(/[?#]/)[0];
+  const cfg = GDK_CONFIG.IMAGES;
+  if (cfg.PLACEHOLDERS.some(p => path === p)) return null;
+  if (cfg.MODE !== 'local') return src;
+
+  const fileName = path.split('/').pop() || '';
+  const baseName = fileName.replace(/\.[^.]+$/, '');
+  if (!baseName) return src;
+  return cfg.DIR + '/' + baseName + '_' + md5Hex(path).slice(0, 6) + '.' + cfg.EXT;
+}
+
+// "Профильная труба 60х40х2" → { width: 60, height: 40, wall: 2 }
+function parseProfileFromName(name) {
+  const m = /(\d{2,3})\s*[xхХX×*]\s*(\d{2,3})(?:\s*[xхХX×*]\s*(\d{1,2}(?:[.,]\d)?))?/.exec(String(name || ''));
+  if (!m) return null;
+  return {
+    width: parseInt(m[1], 10),
+    height: parseInt(m[2], 10),
+    wall: m[3] ? parseFloat(m[3].replace(',', '.')) : null
+  };
+}
+
+function escapeHtml(text) {
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
