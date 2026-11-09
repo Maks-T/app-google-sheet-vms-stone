@@ -37,7 +37,7 @@ app-google-sheet-vms-stone/
 │
 ├── dictionaries/
 │   ├── Dictionaries.js            # getComplexDictionariesDefinition() — точка сборки
-│   ├── CalculatorSettings.js      # getCalculatorSettingsDictionary() — 26 инженерных настроек
+│   ├── CalculatorSettings.js      # getCalculatorSettingsDictionary() — 28 инженерных настроек
 │   ├── FoundationSpans.js         # getFoundationSpansDictionary() — матрица пролетов основания
 │   └── CalculatorLayouts.js       # getCalculatorLayoutsDictionary() — 312 формул раскладки 500–16000 мм
 │

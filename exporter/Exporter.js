@@ -169,6 +169,8 @@ function collectAllProductsFromSheets(ss) {
         }
         if (typeKey === 'rebar' && widthMm) eav.diameter_mm = widthMm;
         if (sourceUrl) eav.source_url = sourceUrl;
+        // диаметр основания опоры; можно переопределить через «Доп. атрибуты EAV» (base_diameter_mm=150)
+        if (typeKey === 'adjustable_pedestal') eav.base_diameter_mm = 200;
         Object.assign(eav, extraEav);
 
         productsMap.set(productCode, {

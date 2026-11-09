@@ -13,7 +13,7 @@ function getCalculatorSettingsDictionary() {
     { slug: "minTrapezeTopBaseTerrace", value: 50, sort: 7 },
     { slug: "joistMinRemain", value: 200, sort: 8 },
     { slug: "joistStep", value: 300, sort: 9 },
-    { slug: "joistOverhang", value: 50, sort: 10 },
+    { slug: "joistOverhang", value: 100, sort: 10 },
     { slug: "joistOverhangStepBoard", value: 25, sort: 11 },
     { slug: "cornerMinRemain", value: 200, sort: 12 },
     { slug: "joistStepSewing", value: 600, sort: 13 },
@@ -29,7 +29,9 @@ function getCalculatorSettingsDictionary() {
     { slug: "rebarEmbedDepth", value: 150, sort: 23 },
     { slug: "rebarCutMargin", value: 100, sort: 24 },
     { slug: "pileEdgeOffset", value: 200, sort: 25 },
-    { slug: "minTerraceHeightPile", value: 250, sort: 26 }
+    { slug: "minTerraceHeightPile", value: 250, sort: 26 },
+    { slug: "joistPairSpacing", value: 150, sort: 27 },
+    { slug: "boardEndGap", value: 4, sort: 28 }
   ];
 
   return {
